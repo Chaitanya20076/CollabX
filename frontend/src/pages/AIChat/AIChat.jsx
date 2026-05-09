@@ -808,4 +808,9 @@ const AIChat = () => {
             </p>
           </div>
         </div>
-      </div
+      </div>
+    </section>
+  );
+};
+
+export default AIChat;

@@ -115,4 +115,23 @@ export const SeatSelectionWidget = ({ mode = 'movie', onConfirm }) => {
   );
 };
 
-export const Su
+export const SummaryWidget = ({ details, onContinue }) => {
+  return (
+    <div className="mt-2 bg-[#2a2a2a] p-4 rounded-xl border border-gray-700">
+      <h3 className="font-semibold text-white mb-3">Booking Summary</h3>
+      <div className="space-y-2 mb-4">
+        {details.map((detail, idx) => (
+          <div key={idx} className="text-sm text-gray-300 flex justify-between">
+            <span>{detail}</span>
+          </div>
+        ))}
+      </div>
+      <button
+        onClick={onContinue}
+        className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg text-sm font-medium transition-colors"
+      >
+        Continue to Payment
+      </button>
+    </div>
+  );
+};

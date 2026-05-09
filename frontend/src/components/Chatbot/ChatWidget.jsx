@@ -181,4 +181,8 @@ const ChatWidget = () => {
           </div>
         </div>
       )}
- 
+    </>
+  );
+};
+
+export default ChatWidget;
