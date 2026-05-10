@@ -1009,3 +1009,60 @@ export const SummaryWidget = ({
     </motion.div>
   );
 };
+
+export const TicketDraftWidget = ({ draft, onConfirm }) => {
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      className="mt-4 w-full max-w-md overflow-hidden rounded-3xl border border-white/10 bg-[#0a0a0a] shadow-2xl"
+    >
+      <div className="bg-gradient-to-r from-purple-600/20 to-blue-600/20 p-5 border-b border-white/10">
+        <h3 className="text-lg font-bold text-white flex items-center gap-2">
+          <Ticket size={20} className="text-purple-400" />
+          Support Ticket Draft
+        </h3>
+        <p className="text-xs text-gray-400 mt-1">Please review before submitting</p>
+      </div>
+
+      <div className="p-5 space-y-4">
+        <div>
+          <p className="text-[10px] text-gray-500 uppercase font-black tracking-widest">Title</p>
+          <p className="text-sm text-gray-200 mt-1 font-semibold">{draft.title}</p>
+        </div>
+        
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <p className="text-[10px] text-gray-500 uppercase font-black tracking-widest">Category</p>
+            <p className="text-sm text-white mt-1 bg-white/5 inline-block px-2 py-1 rounded">{draft.category}</p>
+          </div>
+          <div>
+            <p className="text-[10px] text-gray-500 uppercase font-black tracking-widest">Priority</p>
+            <p className={`text-sm mt-1 inline-block px-2 py-1 rounded ${draft.priority === 'High' ? 'text-red-300 bg-red-500/20' : 'text-blue-300 bg-blue-500/20'}`}>
+              {draft.priority}
+            </p>
+          </div>
+        </div>
+
+        <div>
+          <p className="text-[10px] text-gray-500 uppercase font-black tracking-widest">Description</p>
+          <div className="mt-1 p-3 bg-white/5 rounded-xl border border-white/10 text-sm text-gray-300 whitespace-pre-wrap">
+            {draft.summary}
+          </div>
+        </div>
+      </div>
+
+      <div className="p-4 bg-white/5 border-t border-white/10">
+        <motion.button
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
+          onClick={onConfirm}
+          className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white py-3 rounded-xl font-black text-sm uppercase tracking-widest shadow-lg flex items-center justify-center gap-2"
+        >
+          Submit Ticket <Send size={16} />
+        </motion.button>
+      </div>
+    </motion.div>
+  );
+};
+

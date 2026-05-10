@@ -38,6 +38,7 @@ import {
   MCQWidget,
   SeatSelectionWidget,
   SummaryWidget,
+  TicketDraftWidget,
 } from "../../components/Chatbot/BookingWidgets";
 
 const welcomeMessage = {
@@ -1016,6 +1017,17 @@ const AIChat = () => {
                         }
                       />
                     )}
+                  {message.widget && message.widget.type === "ticket_draft" && (
+                    <TicketDraftWidget
+                      draft={message.widget.draft}
+                      onConfirm={() => {
+                        handleCreateTicket();
+                        appendAssistantMessage(
+                          "Your ticket has been successfully submitted to the dashboard! Our support team will review it shortly."
+                        );
+                      }}
+                    />
+                  )}
 
                   {!!message.attachments?.length && (
                     <div className="mt-3 space-y-2 text-sm opacity-90">

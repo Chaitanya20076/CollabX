@@ -1,16 +1,8 @@
-import {
-  generateAIResponse,
-} from "../ai/sarvamClient.js";
+import { generateAIResponse } from "../ai/sarvamClient.js";
+import { searchWeb } from "../websearch/tavilySearch.js";
+import { buildTicketDraft, detectIntent, getQuickSuggestions } from "./intentService.js";
 
-import {
-  searchWeb,
-} from "../websearch/tavilySearch.js";
-
-import {
-  buildTicketDraft,
-  detectIntent,
-  getQuickSuggestions,
-} from "./intentService.js";
+import { detectUnavailableMovies, extractMovieOptions } from "./movieUtils.js";
 
 const bookingModes = {
   movie_booking: "movie",
@@ -59,7 +51,17 @@ const isBookingIntent = (intent = "") =>
   Object.prototype.hasOwnProperty.call(bookingModes, intent);
 
 const inferConversationIntent = (message, history, detectedIntent) => {
-  if (detectedIntent.intent !== "general_support") {
+  const isGenericBooking = isGenericTicketBookingRequest(message);
+  
+  if (isGenericBooking) {
+    return {
+      ...detectedIntent,
+      intent: "movie_booking", // default to movie if generic
+      label: "Movie booking",
+    };
+  }
+
+  if (detectedIntent.intent !== "general_support" && detectedIntent.intent !== "support_ticket") {
     return detectedIntent;
   }
 
@@ -485,9 +487,7 @@ export const processAIChat =
       "availability",
     ];
 
-    const shouldSearchWeb =
-      webTriggers.some((word) => lower.includes(word)) &&
-      detectedIntent.needsWebSearch;
+    const shouldSearchWeb = detectedIntent.needsWebSearch;
 
     // WEB SEARCH
 
@@ -558,6 +558,31 @@ When details are missing, ask the next 1 to 3 useful questions instead of guessi
         ? "hotel"
         : bookingMode;
 
+    // Detect unavailable movies and provide denial response
+    if (detectedIntent.intent === "movie_booking" && shouldSearchWeb) {
+      const unavailable = detectUnavailableMovies(webResults);
+      if (unavailable) {
+        cleanReply = "I couldn't find any movies playing today at the nearest location. Would you like to check movies releasing this week, look for streaming options, or try a different booking?";
+        widget = {
+          type: "mcq",
+          options: [
+            "Check this week's releases",
+            "Look for streaming options",
+            "Different booking",
+          ],
+        };
+        // Skip fallback logic for this case
+        return {
+          reply: cleanReply,
+          widget: widget,
+          intent: detectedIntent,
+          ticketDraft: buildTicketDraft(cleanMessage, detectedIntent),
+          suggestions: getQuickSuggestions(detectedIntent),
+          usedWebSearch: shouldSearchWeb && webResults.length > 0,
+        };
+      }
+    }
+
     const shouldUseFallback =
       /AI service unavailable|No response generated/i.test(aiReply) ||
       (isBookingIntent(detectedIntent.intent) && !widget);
@@ -570,18 +595,40 @@ When details are missing, ask the next 1 to 3 useful questions instead of guessi
           detectedIntent
         );
 
-      cleanReply = fallback.reply;
+      if (/AI service unavailable|No response generated/i.test(aiReply)) {
+        cleanReply = fallback.reply;
+      } else {
+        cleanReply = cleanReply || fallback.reply;
+      }
       widget = fallback.widget;
-      aiReply = fallback.reply;
+      aiReply = cleanReply;
     }
 
+    // Inject dynamic movie options if returning an MCQ widget for movies
     if (
-      isBookingIntent(detectedIntent.intent) &&
-      widget?.type === "input" &&
-      /\b2[\).]/.test(cleanReply)
+      widget?.type === "mcq" &&
+      detectedIntent.intent === "movie_booking" &&
+      shouldSearchWeb
     ) {
-      cleanReply =
-        "Sure, I can set that up. Which city or location should I search for?";
+      const dynamicOptions = extractMovieOptions(webResults);
+      if (dynamicOptions) {
+        widget.options = dynamicOptions;
+      }
+    }
+
+    const ticketDraft = buildTicketDraft(cleanMessage, detectedIntent);
+
+    // If it's a support ticket or refund and we have enough details to generate a draft
+    if (
+      (detectedIntent.intent === "support_ticket" || detectedIntent.intent === "refund") &&
+      ticketDraft && 
+      ticketDraft.summary?.length > 20
+    ) {
+      widget = {
+        type: "ticket_draft",
+        draft: ticketDraft
+      };
+      cleanReply = "I have drafted a support ticket based on your details. You can review and submit it below.";
     }
 
     if (!cleanReply && !widget) {
@@ -592,11 +639,8 @@ When details are missing, ask the next 1 to 3 useful questions instead of guessi
       reply: cleanReply,
       widget: widget,
       intent: detectedIntent,
-      ticketDraft:
-        buildTicketDraft(cleanMessage, detectedIntent),
-      suggestions:
-        getQuickSuggestions(detectedIntent),
-      usedWebSearch:
-        shouldSearchWeb && webResults.length > 0,
+      ticketDraft: ticketDraft,
+      suggestions: getQuickSuggestions(detectedIntent),
+      usedWebSearch: shouldSearchWeb && webResults.length > 0,
     };
   };

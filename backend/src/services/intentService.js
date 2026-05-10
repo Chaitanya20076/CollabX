@@ -99,7 +99,11 @@ export const detectIntent = (message = "") => {
     "weather",
     "news",
     "trending",
-  ].some((word) => lower.includes(word));
+    "movie",
+    "book",
+    "flight",
+    "event"
+  ].some((word) => lower.includes(word)) || ["movie_booking", "flight_booking", "event_booking", "concert_booking"].includes(matchedRule.intent);
 
   return {
     intent: matchedRule.intent,

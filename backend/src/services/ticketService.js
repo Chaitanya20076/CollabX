@@ -24,15 +24,42 @@ const serializeTicket = (doc) => {
   };
 };
 
+const SUPPORT_AGENTS = [
+  { id: "agent-1", name: "Alice", specialty: "booking" },
+  { id: "agent-2", name: "Bob", specialty: "refund" },
+  { id: "agent-3", name: "Charlie", specialty: "technical" },
+  { id: "agent-4", name: "Diana", specialty: "general_support" }
+];
+
+const assignTicketToAgent = async (ticketCategory) => {
+  const preferredAgents = SUPPORT_AGENTS.filter(a => a.specialty === ticketCategory);
+  const agentsPool = preferredAgents.length > 0 ? preferredAgents : SUPPORT_AGENTS;
+  
+  const agentLoads = await Promise.all(
+    agentsPool.map(async (agent) => {
+      const snapshot = await tickets.where("assignedTo.id", "==", agent.id)
+                                    .where("status", "==", "open")
+                                    .count().get();
+      return { agent, count: snapshot.data().count };
+    })
+  );
+
+  agentLoads.sort((a, b) => a.count - b.count);
+  return agentLoads[0].agent;
+};
+
 export const createTicket = async (payload = {}) => {
   const now = new Date();
   const docRef = tickets.doc();
+  const category = payload.category || "general_support";
+  
+  const assignedAgent = await assignTicketToAgent(category);
 
   const ticket = {
     userId: payload.userId || "anonymous",
     userEmail: payload.userEmail || "",
     title: payload.title || "Support request",
-    category: payload.category || "general_support",
+    category,
     summary: payload.summary || "",
     priority: payload.priority || "normal",
     status: "open",
@@ -40,6 +67,7 @@ export const createTicket = async (payload = {}) => {
     attachments: Array.isArray(payload.attachments)
       ? payload.attachments.slice(0, 5)
       : [],
+    assignedTo: assignedAgent,
     createdAt: now,
     updatedAt: now,
   };
@@ -52,11 +80,13 @@ export const createTicket = async (payload = {}) => {
   await trackActivity({
     userId: ticket.userId,
     type: "ticket_created",
-    title: "Ticket created",
-    description: ticket.title,
+    title: "Ticket assigned",
+    description: `Ticket assigned to agent ${assignedAgent.name}`,
     metadata: {
       ticketId: serialized.id,
       priority: ticket.priority,
+      agentId: assignedAgent.id,
+      agentName: assignedAgent.name,
     },
   });
 

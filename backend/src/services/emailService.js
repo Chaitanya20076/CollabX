@@ -1,56 +1,48 @@
-import nodemailer from "nodemailer";
+import { firestore } from "../config/firebaseAdmin.js";
 
-const createTransporter = () => {
-  if (
-    !process.env.SMTP_HOST ||
-    !process.env.SMTP_USER ||
-    !process.env.SMTP_PASS
-  ) {
-    return null;
-  }
-
-  return nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: Number(process.env.SMTP_PORT || 587),
-    secure: process.env.SMTP_SECURE === "true",
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
-    },
-  });
-};
-
+/**
+ * Sends an email using the Firebase Trigger Email Extension.
+ * The extension listens to the "mail" collection and processes any new documents added.
+ * 
+ * @param {Object} options
+ * @param {string} options.to - Recipient email address
+ * @param {string} options.subject - Email subject
+ * @param {string} options.text - Plain text email content
+ * @param {string} options.html - Optional HTML email content
+ */
 export const sendEmailNotification = async ({
   to,
   subject,
   text,
   html,
 } = {}) => {
-  const transporter = createTransporter();
-
-  if (!transporter) {
-    return {
-      sent: false,
-      reason: "SMTP is not configured",
-    };
-  }
-
   try {
-    await transporter.sendMail({
-      from:
-        process.env.SMTP_FROM ||
-        process.env.SMTP_USER,
-      to,
-      subject,
-      text,
-      html,
+    if (!to) throw new Error("Recipient email address is required");
+
+    console.log(`Adding email to Firebase 'mail' collection for: ${to}`);
+
+    // The Trigger Email extension expects the document to have 'to' and 'message' fields
+    const docRef = await firestore.collection("mail").add({
+      to: to,
+      message: {
+        subject: subject,
+        text: text,
+        html: html || text,
+      },
+      createdAt: new Date()
     });
+
+    console.log(`\n==========================================`);
+    console.log(`✉️  EMAIL ADDED TO FIRESTORE MAIL QUEUE: ${to}`);
+    console.log(`📄 DOCUMENT ID: ${docRef.id}`);
+    console.log(`==========================================\n`);
 
     return {
       sent: true,
+      docId: docRef.id
     };
   } catch (error) {
-    console.log("EMAIL ERROR:", error.message);
+    console.error("FIREBASE EMAIL ERROR:", error.message);
 
     return {
       sent: false,
