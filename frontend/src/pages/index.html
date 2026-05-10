@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CollabX | Slow Cinematic Reveal</title>
+    <style>
+        :root {
+            --gold: #d4af37;
+            --white: #ffffff;
+            --ticket-bg: linear-gradient(135deg, rgba(10, 20, 40, 0.95), rgba(2, 5, 15, 0.98));
+            --bg: #000000;
+            /* 14 seconds for a premium, slow-motion feel */
+            --duration: 14s; 
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            background-color: var(--bg);
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            font-family: 'Inter', -apple-system, sans-serif;
+            perspective: 2500px;
+        }
+
+        .scene {
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transform-style: preserve-3d;
+            animation: cameraMaster var(--duration) cubic-bezier(0.4, 0, 0.2, 1) infinite;
+        }
+
+        /* --- THE TICKET --- */
+        .ticket {
+            position: absolute;
+            width: 540px;
+            height: 270px;
+            background: var(--ticket-bg);
+            border: 1px solid rgba(212, 175, 55, 0.25);
+            border-radius: 12px;
+            backdrop-filter: blur(30px);
+            padding: 40px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            box-shadow: 0 60px 150px rgba(0,0,0,0.9);
+            z-index: 1;
+            /* Micro-texture overlay */
+            background-image: radial-gradient(rgba(255,255,255,0.05) 1px, transparent 1px);
+            background-size: 20px 20px;
+            animation: ticketDissolve var(--duration) cubic-bezier(0.4, 0, 0.2, 1) infinite;
+        }
+
+        .t-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 10px;
+            color: var(--gold);
+            letter-spacing: 6px;
+            text-transform: uppercase;
+            font-weight: 700;
+            border-bottom: 1px dashed rgba(212, 175, 55, 0.15);
+            padding-bottom: 12px;
+        }
+
+        .barcode {
+            width: 160px;
+            height: 30px;
+            background: repeating-linear-gradient(90deg, #fff, #fff 1.5px, transparent 1.5px, transparent 5px);
+            opacity: 0.15;
+        }
+
+        /* --- THE LOGO: COLLABX --- */
+        .brand-logo {
+            position: relative;
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 900;
+            font-size: 6.5rem; /* Larger hero text */
+            color: var(--white);
+            pointer-events: none;
+            /* Negative gap to force the X to sit tight against the B */
+            gap: 0; 
+        }
+
+        .collab-text {
+            display: inline-block;
+            overflow: hidden;
+            white-space: nowrap;
+            width: 0;
+            opacity: 0;
+            filter: blur(25px);
+            /* This closes the gap entirely */
+            margin-right: -4px; 
+            animation: revealCollab var(--duration) cubic-bezier(0.3, 0, 0.1, 1) infinite;
+        }
+
+        .x-hero {
+            color: var(--gold);
+            display: inline-block;
+            transform-origin: center;
+            animation: xHeroAnimation var(--duration) cubic-bezier(0.4, 0, 0.2, 1) infinite;
+        }
+
+        /* --- ANIMATIONS --- */
+
+        @keyframes cameraMaster {
+            0% { transform: scale(0.55) translateZ(-800px) rotateY(-15deg); }
+            45% { transform: scale(1) translateZ(0) rotateY(0deg); }
+            /* Extreme slow push past the card */
+            85%, 100% { transform: scale(1.6) translateZ(500px); }
+        }
+
+        @keyframes ticketDissolve {
+            0%, 55% { opacity: 1; filter: blur(0); }
+            /* Dissolves exactly as the camera pushes through */
+            75%, 100% { 
+                opacity: 0; 
+                filter: blur(60px); 
+                transform: scale(0.85) translateZ(-300px); 
+            }
+        }
+
+        @keyframes revealCollab {
+            0%, 65% { width: 0; opacity: 0; filter: blur(25px); transform: translateX(50px); }
+            /* Reveal starts late and slow */
+            85%, 100% { 
+                width: 410px; 
+                opacity: 1; 
+                filter: blur(0); 
+                transform: translateX(0);
+            }
+        }
+
+        @keyframes xHeroAnimation {
+            0%, 60% { transform: scale(1); text-shadow: none; color: var(--gold); }
+            /* Metallic shimmer movement */
+            70% { transform: scale(1.15) rotateY(20deg); text-shadow: 0 0 20px var(--gold); }
+            75% { transform: scale(1.15) rotateY(-20deg); }
+            /* Final locked state: Gold-tinted white hot */
+            85%, 100% { 
+                transform: scale(1.1) rotateY(0);
+                color: #ffffff;
+                text-shadow: 0 0 35px var(--gold), 0 0 70px rgba(212, 175, 55, 0.5);
+            }
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="scene">
+        <div class="ticket">
+            <div class="t-header">
+                <span>Access Terminal</span>
+                <span>Bengaluru // 2026</span>
+            </div>
+            
+            <div class="t-header" style="border: none; margin-top: auto;">
+                <div class="barcode"></div>
+                <div style="text-align: right; opacity: 0.3; font-size: 8px; letter-spacing: 1px;">
+                    PROTOCOL: COLLAB_X_7<br>
+                    SECURE_HANDSHAKE_OK
+                </div>
+            </div>
+        </div>
+
+        <div class="brand-logo">
+            <span class="collab-text">Collab</span>
+            <span class="x-hero">X</span>
+        </div>
+    </div>
+
+</body>
+</html>

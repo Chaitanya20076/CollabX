@@ -9,7 +9,8 @@ const MainLayout = () => {
 
   const hideLayout =
   location.pathname === "/dashboard" ||
-  location.pathname === "/ai-chat";
+  location.pathname === "/ai-chat" ||
+  location.pathname.startsWith("/payment-confirm");
 
   return (
     <div className="bg-black text-white min-h-screen flex flex-col">

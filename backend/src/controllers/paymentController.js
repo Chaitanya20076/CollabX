@@ -1,5 +1,8 @@
 import {
+  confirmCollabXPaymentSession,
+  createCollabXPaymentSession,
   createPaymentOrder,
+  getCollabXPaymentSession,
   getUserTransactions,
   markPaymentFailure,
   requestPaymentRefund,
@@ -23,6 +26,84 @@ export const createOrder =
         success: false,
         message:
           error.message || "Payment order failed",
+      });
+    }
+  };
+
+export const createCollabXSession =
+  async (req, res) => {
+    try {
+      const session =
+        await createCollabXPaymentSession(req.body);
+
+      res.status(201).json({
+        success: true,
+        session,
+      });
+    } catch (error) {
+      console.log(error);
+
+      res.status(error.statusCode || 500).json({
+        success: false,
+        message:
+          error.message || "CollabX payment session failed",
+      });
+    }
+  };
+
+export const getCollabXSession =
+  async (req, res) => {
+    try {
+      const session =
+        await getCollabXPaymentSession(req.params.token);
+
+      if (!session) {
+        return res.status(404).json({
+          success: false,
+          message: "Payment session not found",
+        });
+      }
+
+      res.status(200).json({
+        success: true,
+        session,
+      });
+    } catch (error) {
+      console.log(error);
+
+      res.status(500).json({
+        success: false,
+        message: "Payment session loading failed",
+      });
+    }
+  };
+
+export const confirmCollabXSession =
+  async (req, res) => {
+    try {
+      const session =
+        await confirmCollabXPaymentSession({
+          token: req.params.token,
+          method: req.body.method,
+        });
+
+      if (!session) {
+        return res.status(404).json({
+          success: false,
+          message: "Payment session not found",
+        });
+      }
+
+      res.status(200).json({
+        success: true,
+        session,
+      });
+    } catch (error) {
+      console.log(error);
+
+      res.status(500).json({
+        success: false,
+        message: "Payment confirmation failed",
       });
     }
   };

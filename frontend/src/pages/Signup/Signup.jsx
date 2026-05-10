@@ -87,7 +87,7 @@ const Signup = () => {
         "Verification email sent successfully"
       );
 
-      navigate("/setup-loader");
+      navigate("/verify-email");
     } catch (error) {
       toast.error(error.message);
     } finally {

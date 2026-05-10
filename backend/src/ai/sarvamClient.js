@@ -59,6 +59,10 @@ const normalizeHistory = (history) => {
 export const generateAIResponse =
   async (userMessage, history = []) => {
     try {
+      if (!SARVAM_API_KEY) {
+        return "AI service unavailable currently.";
+      }
+
       const safeHistory =
         normalizeHistory(history);
 

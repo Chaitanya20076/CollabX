@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
-
+import { useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Bot,
   Ticket,
@@ -8,330 +9,251 @@ import {
   Workflow,
   LayoutDashboard,
   CheckCircle2,
+  Sparkles,
+  ArrowUpRight,
 } from "lucide-react";
 
 const About = () => {
+  const navigate = useNavigate();
+
   const features = [
     {
-      icon: <Bot size={38} />,
+      icon: <Bot size={32} />,
       title: "AI Chatbot Assistance",
       desc: "CollabX integrates intelligent chatbot systems capable of understanding user intent and automating ticket workflows.",
+      color: "from-blue-500/20 to-cyan-500/20",
     },
     {
-      icon: <Ticket size={38} />,
+      icon: <Ticket size={32} />,
       title: "Automated Ticketing",
       desc: "Support requests, complaints and booking workflows are converted into trackable tickets automatically.",
+      color: "from-purple-500/20 to-pink-500/20",
     },
     {
-      icon: <BrainCircuit size={38} />,
+      icon: <BrainCircuit size={32} />,
       title: "AI Intent Detection",
       desc: "The platform identifies user requests such as support issues, bookings and payment workflows using smart logic.",
+      color: "from-orange-500/20 to-red-500/20",
     },
     {
-      icon: <Workflow size={38} />,
+      icon: <Workflow size={32} />,
       title: "Workflow Automation",
       desc: "Entire support lifecycles are streamlined from chatbot interaction to ticket resolution.",
+      color: "from-emerald-500/20 to-teal-500/20",
     },
     {
-      icon: <LayoutDashboard size={38} />,
+      icon: <LayoutDashboard size={32} />,
       title: "Realtime Dashboard",
       desc: "Track ticket statuses, chatbot activity and support performance using modern dashboards.",
+      color: "from-blue-600/20 to-indigo-600/20",
     },
     {
-      icon: <ShieldCheck size={38} />,
+      icon: <ShieldCheck size={32} />,
       title: "Secure Infrastructure",
       desc: "Authentication and protected workflows ensure secure interactions across the platform.",
+      color: "from-gray-500/20 to-slate-800/20",
     },
   ];
 
-  const timeline = [
-    {
-      title: "Problem Identification",
-      desc: "Traditional support systems often suffer from delayed responses, inefficient workflows and poor automation.",
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: { staggerChildren: 0.1, delayChildren: 0.3 },
     },
-    {
-      title: "AI Driven Solution",
-      desc: "CollabX was conceptualized to combine chatbot intelligence with automated ticketing and workflow management.",
+  };
+
+  const itemVariants = {
+    hidden: { y: 20, opacity: 0 },
+    visible: {
+      y: 0,
+      opacity: 1,
+      transition: { duration: 0.5, ease: "easeOut" },
     },
-    {
-      title: "Modern SaaS Architecture",
-      desc: "The system uses scalable frontend and backend technologies suitable for modern cloud deployments.",
-    },
-    {
-      title: "Future Scalability",
-      desc: "The architecture supports future integrations including payment gateways, real-time analytics and advanced AI models.",
-    },
-  ];
+  };
 
   return (
-    <>
+    <div className="bg-[#030303] text-white selection:bg-blue-500/30 font-sans">
       {/* HERO SECTION */}
+      <section className="relative min-h-[90vh] flex items-center justify-center overflow-hidden pt-20">
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full">
+          <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-600/10 blur-[120px] rounded-full animate-pulse" />
+          <div className="absolute bottom-[10%] right-[-5%] w-[30%] h-[30%] bg-purple-600/10 blur-[120px] rounded-full" />
+        </div>
 
-      <section className="relative overflow-hidden py-28">
-
-        <div className="absolute inset-0 bg-gradient-to-b from-blue-900/10 via-transparent to-transparent"></div>
-
-        <div className="container-custom relative z-10">
-
+        <div className="container px-6 relative z-10 text-center">
           <motion.div
-            initial={{ opacity: 0, y: 60 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8 }}
-            className="max-w-5xl"
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 1, ease: "easeOut" }}
           >
-
-            <div className="inline-flex items-center gap-3 border border-blue-500/30 bg-blue-500/10 px-5 py-2 rounded-full text-blue-400 mb-8">
-              AI Powered Support Ecosystem
+            <div className="inline-flex items-center gap-2 border border-white/10 bg-white/5 backdrop-blur-md px-4 py-2 rounded-full text-sm font-medium text-blue-400 mb-8 hover:bg-white/10 transition-colors cursor-default">
+              <Sparkles size={14} className="animate-pulse" />
+              <span>AI-Powered Support Ecosystem</span>
             </div>
 
-            <h1 className="text-5xl md:text-7xl font-bold leading-tight mb-10">
-              About{" "}
-              <span className="gradient-text">
+            <h1 className="text-6xl md:text-8xl font-black tracking-tighter mb-8 leading-[1.1]">
+              Redefining <br />
+              <span className="bg-gradient-to-r from-blue-400 via-indigo-400 to-purple-500 bg-clip-text text-transparent italic">
                 CollabX
               </span>
             </h1>
 
-            <p className="text-gray-400 text-lg leading-9 max-w-4xl">
-              CollabX is an intelligent AI powered chatbot based
-              ticketing platform designed to modernize customer
-              support systems, automate workflows and improve issue
-              resolution efficiency using smart automation and
-              scalable cloud architecture.
+            <p className="text-gray-400 text-lg md:text-xl max-w-2xl mx-auto leading-relaxed mb-12">
+              An intelligent infrastructure designed to modernize 
+              customer support through seamless automation and neural intent detection.
             </p>
 
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.8 }}
+              className="flex flex-col items-center gap-4"
+            >
+              <div className="w-px h-24 bg-gradient-to-b from-blue-500 to-transparent" />
+            </motion.div>
           </motion.div>
-
         </div>
-
       </section>
 
       {/* MISSION SECTION */}
-
-      <section className="py-24 bg-[#050505]">
-
-        <div className="container-custom grid lg:grid-cols-2 gap-20 items-center">
-
-          <div>
-
-            <h2 className="text-5xl font-bold mb-8 gradient-text">
-              Our Mission
-            </h2>
-
-            <p className="text-gray-400 text-lg leading-9 mb-8">
-              Our mission is to bridge the gap between traditional
-              customer support systems and intelligent AI powered
-              automation by creating scalable chatbot driven support
-              ecosystems.
-            </p>
-
-            <p className="text-gray-400 text-lg leading-9">
-              CollabX focuses on improving response efficiency,
-              reducing manual workloads and enhancing user experience
-              through realtime workflows and intelligent ticketing
-              infrastructure.
-            </p>
-
-          </div>
-
-          <div className="bg-gradient-to-br from-blue-600 to-purple-700 rounded-[40px] p-[1px]">
-
-            <div className="bg-black rounded-[40px] p-10 h-full">
-
-              <h3 className="text-4xl font-bold mb-10">
-                Core Objectives
-              </h3>
-
-              <div className="space-y-8">
-
-                <div className="flex items-start gap-5">
-                  <CheckCircle2 className="text-green-500 mt-1" />
-
-                  <div>
-                    <h4 className="text-2xl font-semibold mb-2">
-                      Smart Automation
-                    </h4>
-
-                    <p className="text-gray-400 leading-7">
-                      Reduce manual intervention using AI driven workflows.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-5">
-                  <CheckCircle2 className="text-blue-500 mt-1" />
-
-                  <div>
-                    <h4 className="text-2xl font-semibold mb-2">
-                      Better User Experience
-                    </h4>
-
-                    <p className="text-gray-400 leading-7">
-                      Provide seamless chatbot interactions and faster resolutions.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-5">
-                  <CheckCircle2 className="text-purple-500 mt-1" />
-
-                  <div>
-                    <h4 className="text-2xl font-semibold mb-2">
-                      Scalable Architecture
-                    </h4>
-
-                    <p className="text-gray-400 leading-7">
-                      Build future-ready systems capable of enterprise scaling.
-                    </p>
-                  </div>
-                </div>
-
-              </div>
-
+      <section className="py-32 relative">
+        <div className="container px-6 mx-auto">
+          <motion.div
+            whileInView={{ opacity: 1, y: 0 }}
+            initial={{ opacity: 0, y: 40 }}
+            viewport={{ once: true }}
+            className="relative group overflow-hidden rounded-[2.5rem] border border-white/10 bg-gradient-to-br from-white/5 to-transparent backdrop-blur-2xl p-12 md:p-20"
+          >
+            <div className="absolute top-0 right-0 p-8 text-white/5 group-hover:text-blue-500/10 transition-colors duration-700">
+              <Bot size={200} strokeWidth={0.5} />
             </div>
 
-          </div>
+            <div className="grid lg:grid-cols-2 gap-16 relative z-10">
+              <div>
+                <h2 className="text-4xl md:text-5xl font-bold mb-8 tracking-tight">
+                  Our <span className="text-blue-500">Mission</span>
+                </h2>
+                <div className="space-y-6 text-gray-400 text-lg leading-relaxed">
+                  <p>
+                    We bridge the chasm between legacy support and autonomous intelligence. 
+                    CollabX isn't just a tool; it's a living ecosystem that evolves with your users.
+                  </p>
+                  <p>
+                    By merging high-fidelity UI with deep-learning intent detection, 
+                    we reduce manual friction by up to 80%.
+                  </p>
+                </div>
+              </div>
 
+              <div className="bg-white/5 rounded-3xl p-8 border border-white/5 backdrop-blur-sm">
+                <h3 className="text-xl font-semibold mb-8 text-white/90">Execution Pillars</h3>
+                <div className="space-y-6">
+                  {[
+                    { title: "Smart Automation", color: "text-green-400" },
+                    { title: "Immersive UX", color: "text-blue-400" },
+                    { title: "Elastic Scaling", color: "text-purple-400" },
+                  ].map((pill, i) => (
+                    <div key={i} className="flex items-center gap-4 group/item">
+                      <div className={`p-2 rounded-lg bg-white/5 ${pill.color} group-hover/item:scale-110 transition-transform`}>
+                        <CheckCircle2 size={20} />
+                      </div>
+                      <span className="text-lg font-medium text-gray-300">{pill.title}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </motion.div>
         </div>
-
       </section>
 
       {/* FEATURES SECTION */}
-
-      <section className="py-28">
-
-        <div className="container-custom">
-
-          <div className="text-center mb-20">
-
-            <h2 className="text-5xl font-bold mb-6 gradient-text">
-              Platform Capabilities
-            </h2>
-
-            <p className="text-gray-400 text-lg max-w-3xl mx-auto leading-8">
-              Built using modern technologies and intelligent
-              architecture for scalable support ecosystems.
-            </p>
-
+      <section className="py-32">
+        <div className="container px-6 mx-auto">
+          <div className="text-center mb-24">
+            <h2 className="text-4xl md:text-6xl font-bold mb-6 tracking-tight">Core Protocol</h2>
+            <p className="text-gray-500 text-lg">Hyper-optimized features for elite support teams.</p>
           </div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-
+          <motion.div
+            variants={containerVariants}
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true }}
+            className="grid md:grid-cols-2 lg:grid-cols-3 gap-6"
+          >
             {features.map((feature, index) => (
-              <div
+              <motion.div
                 key={index}
-                className="bg-[#0a0a0a] border border-gray-800 rounded-3xl p-8 hover:border-blue-500 transition duration-300"
+                variants={itemVariants}
+                whileHover={{ y: -10 }}
+                className="relative group p-8 rounded-[2rem] border border-white/5 bg-[#0a0a0a] overflow-hidden"
               >
-
-                <div className="text-blue-500 mb-6">
-                  {feature.icon}
+                <div className={`absolute inset-0 bg-gradient-to-br ${feature.color} opacity-0 group-hover:opacity-100 transition-opacity duration-500`} />
+                <div className="relative z-10">
+                  <div className="w-14 h-14 rounded-2xl bg-white/5 flex items-center justify-center mb-6 text-blue-400 group-hover:scale-110 group-hover:text-white transition-all duration-500">
+                    {feature.icon}
+                  </div>
+                  <h3 className="text-2xl font-bold mb-4">{feature.title}</h3>
+                  <p className="text-gray-500 leading-relaxed group-hover:text-gray-300 transition-colors">
+                    {feature.desc}
+                  </p>
                 </div>
-
-                <h3 className="text-2xl font-semibold mb-5">
-                  {feature.title}
-                </h3>
-
-                <p className="text-gray-400 leading-8">
-                  {feature.desc}
-                </p>
-
-              </div>
+              </motion.div>
             ))}
-
-          </div>
-
+          </motion.div>
         </div>
-
       </section>
 
-      {/* TIMELINE SECTION */}
-
-      <section className="py-28 bg-[#050505]">
-
-        <div className="container-custom">
-
-          <div className="text-center mb-20">
-
-            <h2 className="text-5xl font-bold mb-6 gradient-text">
-              Project Evolution
-            </h2>
-
-            <p className="text-gray-400 text-lg max-w-3xl mx-auto leading-8">
-              From identifying support inefficiencies to building an
-              AI powered automation platform.
-            </p>
-
-          </div>
-
-          <div className="space-y-10 max-w-5xl mx-auto">
-
-            {timeline.map((item, index) => (
-              <div
-                key={index}
-                className="bg-black border border-gray-800 rounded-3xl p-10"
+      {/* EVOLUTION SECTION */}
+      <section className="py-32 bg-[#050505]">
+        <div className="container px-6 mx-auto">
+          <h2 className="text-4xl font-bold mb-20 text-center">The Evolution</h2>
+          <div className="max-w-4xl mx-auto space-y-4">
+            {[
+              "Problem Identification",
+              "AI Driven Solution",
+              "Modern SaaS Architecture",
+              "Future Scalability",
+            ].map((step, i) => (
+              <motion.div
+                key={i}
+                whileInView={{ x: 0, opacity: 1 }}
+                initial={{ x: i % 2 === 0 ? -50 : 50, opacity: 0 }}
+                viewport={{ once: true }}
+                className="flex items-center gap-8 p-8 bg-white/[0.02] border border-white/5 rounded-2xl hover:bg-white/[0.04] transition-colors"
               >
-
-                <div className="text-blue-500 text-6xl font-bold mb-6">
-                  0{index + 1}
+                <span className="text-5xl font-black text-white/5">{i + 1}</span>
+                <div>
+                  <h3 className="text-xl font-bold text-blue-400">{step}</h3>
+                  <p className="text-gray-500 mt-1">Deploying advanced neural logic to solve legacy bottlenecks.</p>
                 </div>
-
-                <h3 className="text-3xl font-bold mb-5">
-                  {item.title}
-                </h3>
-
-                <p className="text-gray-400 text-lg leading-8">
-                  {item.desc}
-                </p>
-
-              </div>
+              </motion.div>
             ))}
-
           </div>
-
         </div>
-
       </section>
 
-      {/* FINAL SECTION */}
-
-      <section className="py-28">
-
-        <div className="container-custom text-center max-w-5xl">
-
-          <h2 className="text-5xl font-bold mb-8 gradient-text">
-            Building The Future Of Smart Support
+      {/* FINAL CTA SECTION */}
+      <section className="py-40 relative overflow-hidden">
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[300px] bg-blue-600/20 blur-[150px] rounded-full" />
+        
+        <div className="container px-6 relative z-10 text-center mx-auto">
+          <h2 className="text-5xl md:text-7xl font-black mb-12 tracking-tighter">
+            READY TO <span className="text-blue-500">SCALE?</span>
           </h2>
-
-          <p className="text-gray-400 text-lg leading-9 mb-12">
-            CollabX represents the future of intelligent ticketing
-            ecosystems by combining AI chatbot systems, realtime
-            dashboards, workflow automation and scalable cloud
-            architecture into a single modern support platform.
-          </p>
-
-          <div className="flex flex-wrap justify-center gap-6">
-
-            <div className="bg-[#0a0a0a] border border-gray-800 rounded-2xl px-8 py-5">
-              AI Powered
-            </div>
-
-            <div className="bg-[#0a0a0a] border border-gray-800 rounded-2xl px-8 py-5">
-              Cloud Scalable
-            </div>
-
-            <div className="bg-[#0a0a0a] border border-gray-800 rounded-2xl px-8 py-5">
-              Secure Workflow
-            </div>
-
-            <div className="bg-[#0a0a0a] border border-gray-800 rounded-2xl px-8 py-5">
-              Modern SaaS Architecture
-            </div>
-
-          </div>
-
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => navigate("/signup")}
+            className="px-12 py-5 bg-white text-black font-bold rounded-full hover:shadow-[0_0_30px_rgba(255,255,255,0.3)] transition-all cursor-pointer flex items-center gap-3 mx-auto"
+          >
+            Launch CollabX <ArrowUpRight size={20} />
+          </motion.button>
         </div>
-
       </section>
-    </>
+    </div>
   );
 };
 

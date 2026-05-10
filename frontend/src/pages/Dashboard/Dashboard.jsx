@@ -22,6 +22,7 @@ import {
   IndianRupee,
   XCircle,
   RotateCcw,
+  CreditCard,
 } from "lucide-react";
 
 import toast from "react-hot-toast";
@@ -58,6 +59,8 @@ const Dashboard = () => {
   const [ticketLoading, setTicketLoading] =
     useState(false);
   const [bookingLoading, setBookingLoading] =
+    useState(false);
+  const [notificationOpen, setNotificationOpen] =
     useState(false);
 
   useEffect(() => {
@@ -309,6 +312,15 @@ const Dashboard = () => {
 
   const notifications = useMemo(
     () => [
+      ...userActivities.slice(0, 4).map((activity) => ({
+        title: activity.title || "Workspace update",
+        body: activity.description || "New activity received",
+        tone:
+          activity.type?.includes("refund") ||
+          activity.type?.includes("cancel")
+            ? "text-amber-300"
+            : "text-blue-300",
+      })),
       ...(user?.emailVerified
         ? []
         : [
@@ -343,6 +355,7 @@ const Dashboard = () => {
         : []),
     ],
     [
+      userActivities,
       user?.emailVerified,
       highPriorityTickets.length,
       upcomingBookings.length,
@@ -410,29 +423,11 @@ const Dashboard = () => {
   };
 
   const handleCancelBooking = async (id) => {
-    try {
-      await API.patch(`/bookings/${id}/cancel`, {
-        reason: "Cancelled from dashboard",
-      });
-
-      toast.success("Booking cancelled");
-      await refreshBookings();
-    } catch (error) {
-      toast.error("Cancellation failed");
-    }
+    navigate(`/refund/${id}`);
   };
 
   const handleRefundBooking = async (id) => {
-    try {
-      await API.patch(`/bookings/${id}/refund`, {
-        reason: "Refund requested from dashboard",
-      });
-
-      toast.success("Refund requested");
-      await refreshBookings();
-    } catch (error) {
-      toast.error("Refund request failed");
-    }
+    navigate(`/refund/${id}`);
   };
 
   const loadRazorpayScript = () =>
@@ -528,24 +523,17 @@ const Dashboard = () => {
     }
   };
 
-  const handleTransactionRefund = async (id) => {
-    try {
-      await API.patch(
-        `/payments/transactions/${id}/refund`,
-        {
-          reason: "Refund requested from dashboard",
-        }
-      );
-
-      toast.success("Payment refund requested");
-      await refreshTransactions();
-    } catch (error) {
-      toast.error("Refund request failed");
+  const handleTransactionRefund = async (transaction) => {
+    if (transaction.bookingId) {
+      navigate(`/refund/${transaction.bookingId}`);
+      return;
     }
+
+    toast.error("This transaction is not linked to a booking");
   };
 
   return (
-    <section className="min-h-screen bg-black text-white">
+    <section className="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(37,99,235,0.16),transparent_32%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.09),transparent_28%),#020617] text-white">
 
       {/* TOP BAR */}
 
@@ -553,7 +541,7 @@ const Dashboard = () => {
         initial={{ opacity: 0, y: -18 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.45 }}
-        className="border-b border-gray-800 bg-[#050505]"
+        className="border-b border-white/10 bg-black/55 backdrop-blur-xl sticky top-0 z-40"
       >
 
         <div className="container-custom py-5 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
@@ -572,7 +560,7 @@ const Dashboard = () => {
             </h1>
 
             <p className="text-gray-400 mt-3 text-lg">
-              Your AI powered workspace is ready.
+              Live ticketing, payments, refunds, and AI support in one command center.
             </p>
 
           </div>
@@ -596,11 +584,51 @@ const Dashboard = () => {
 
 </Link>
 
-            <button className="w-14 h-14 rounded-2xl bg-[#0a0a0a] border border-gray-800 flex items-center justify-center hover:border-blue-500 transition">
+            <div className="relative">
+              <button
+                onClick={() =>
+                  setNotificationOpen((prev) => !prev)
+                }
+                className="relative w-14 h-14 rounded-2xl bg-white/[0.04] border border-white/10 flex items-center justify-center hover:border-blue-400 transition"
+                aria-label="Open notifications"
+              >
+                <Bell />
+                {!!notifications.length && (
+                  <span className="absolute -top-1 -right-1 min-w-6 h-6 rounded-full bg-blue-500 text-xs font-bold grid place-items-center px-1">
+                    {notifications.length}
+                  </span>
+                )}
+              </button>
 
-              <Bell />
+              {notificationOpen && (
+                <div className="absolute right-0 mt-3 w-[min(360px,calc(100vw-2rem))] rounded-3xl border border-white/10 bg-[#05070c] shadow-2xl shadow-black/50 p-4 z-50">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="font-semibold">
+                      Notifications
+                    </h3>
+                    <span className="text-xs text-gray-500">
+                      Realtime
+                    </span>
+                  </div>
 
-            </button>
+                  <div className="space-y-3 max-h-96 overflow-y-auto">
+                    {notifications.map((item, index) => (
+                      <div
+                        key={`${item.title}-${item.body}-${index}`}
+                        className="rounded-2xl border border-white/10 bg-white/[0.04] p-4"
+                      >
+                        <p className={`font-semibold ${item.tone}`}>
+                          {item.title}
+                        </p>
+                        <p className="text-sm text-gray-400 mt-1 leading-6">
+                          {item.body}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
 
             <button
               onClick={handleLogout}
@@ -730,7 +758,7 @@ const Dashboard = () => {
 
         {/* STATS */}
 
-        <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-8 mb-14">
+        <div className="grid md:grid-cols-2 xl:grid-cols-5 gap-5 mb-14">
 
           {stats.map((stat, index) => (
             <motion.div
@@ -741,7 +769,7 @@ const Dashboard = () => {
                 duration: 0.35,
                 delay: 0.08 * index,
               }}
-              className="bg-[#0a0a0a] border border-gray-800 rounded-3xl p-8"
+              className="bg-white/[0.04] border border-white/10 rounded-3xl p-6 hover:border-blue-400/40 transition"
             >
 
               <div className="flex items-center justify-between mb-6">
@@ -904,9 +932,9 @@ const Dashboard = () => {
 
             <div className="space-y-5">
 
-              {notifications.map((item) => (
+              {notifications.map((item, index) => (
                 <div
-                  key={item.title}
+                  key={`${item.title}-${item.body}-${index}`}
                   className="bg-black border border-gray-800 rounded-2xl p-5"
                 >
 
@@ -954,7 +982,7 @@ const Dashboard = () => {
 
               <IndianRupee size={18} />
 
-              Total Value: ₹{bookingRevenue}
+              Total Value: INR {bookingRevenue}
 
             </div>
 
@@ -1037,11 +1065,11 @@ const Dashboard = () => {
                         <div className="text-right">
 
                           <p className="font-bold text-green-400">
-                            ₹{booking.pricing?.total}
+                            INR {booking.pricing?.total}
                           </p>
 
                           <p className="text-gray-500 text-sm mt-1">
-                            Fee ₹{booking.pricing?.platformFee}
+                            Fee INR {booking.pricing?.platformFee}
                           </p>
 
                           <p className="text-gray-500 text-sm mt-1">
@@ -1071,7 +1099,7 @@ const Dashboard = () => {
                           className="border border-red-500/30 text-red-400 px-4 py-2 rounded-xl flex items-center gap-2"
                         >
                           <XCircle size={16} />
-                          Cancel
+                          Cancel safely
                         </button>
 
                         <button
@@ -1081,7 +1109,7 @@ const Dashboard = () => {
                           className="border border-blue-500/30 text-blue-400 px-4 py-2 rounded-xl flex items-center gap-2"
                         >
                           <RotateCcw size={16} />
-                          Refund
+                          Refund details
                         </button>
 
                       </div>
@@ -1124,13 +1152,13 @@ const Dashboard = () => {
                       </p>
 
                       <p className="text-gray-400 text-sm mt-1">
-                        {booking.confirmationCode} • {booking.status} • Refund: {booking.refundStatus}
+                        {booking.confirmationCode} / {booking.status} / Refund: {booking.refundStatus}
                       </p>
 
                     </div>
 
                     <span className="text-gray-400">
-                      ₹{booking.pricing?.total}
+                      INR {booking.pricing?.total}
                     </span>
 
                   </div>
@@ -1176,7 +1204,7 @@ const Dashboard = () => {
                 </p>
 
                 <p className="text-2xl font-bold text-green-400">
-                  ₹{paymentTotal}
+                  INR {paymentTotal}
                 </p>
 
               </div>
@@ -1261,11 +1289,11 @@ const Dashboard = () => {
                     </td>
 
                     <td className="px-6 py-5">
-                      ₹{transaction.amount}
+                      INR {transaction.amount}
                     </td>
 
                     <td className="px-6 py-5">
-                      ₹{transaction.platformFee}
+                      INR {transaction.platformFee}
                     </td>
 
                     <td className="px-6 py-5">
@@ -1277,11 +1305,12 @@ const Dashboard = () => {
                     <td className="px-6 py-5">
                       <button
                         onClick={() =>
-                          handleTransactionRefund(transaction.id)
+                          handleTransactionRefund(transaction)
                         }
-                        className="border border-blue-500/30 text-blue-400 px-4 py-2 rounded-xl"
+                        className="border border-blue-500/30 text-blue-400 px-4 py-2 rounded-xl inline-flex items-center gap-2"
                       >
-                        Refund
+                        <CreditCard size={16} />
+                        Refund details
                       </button>
                     </td>
 

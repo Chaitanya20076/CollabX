@@ -120,3 +120,26 @@ export const getChatSession = async (id) => {
 
   return doc.exists ? serializeSession(doc) : null;
 };
+
+export const deleteChatSession = async (id) => {
+  const docRef = collection.doc(id);
+  const doc = await docRef.get();
+
+  if (!doc.exists) return null;
+
+  const session = serializeSession(doc);
+
+  await docRef.delete();
+
+  await trackActivity({
+    userId: session.userId,
+    type: "chat_deleted",
+    title: "AI chat deleted",
+    description: session.title,
+    metadata: {
+      chatId: session.id,
+    },
+  });
+
+  return session;
+};

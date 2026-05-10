@@ -25,6 +25,14 @@ const ProtectedRoute = ({ children }) => {
     );
   }
 
+  // Allow Google auth users (who are implicitly verified) but force password users to verify.
+  // user.providerData is an array. Password users have providerId === "password".
+  const isPasswordUser = user.providerData?.some(p => p.providerId === "password");
+  
+  if (!user.emailVerified && isPasswordUser) {
+    return <Navigate to="/verify-email" replace />;
+  }
+
   return children;
 };
 

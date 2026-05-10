@@ -1,8 +1,11 @@
 import express from "express";
 
 import {
+  confirmCollabXSession,
   createOrder,
+  createCollabXSession,
   failPayment,
+  getCollabXSession,
   listTransactions,
   requestRefund,
   verifyOrderPayment,
@@ -11,6 +14,9 @@ import {
 const router = express.Router();
 
 router.get("/transactions", listTransactions);
+router.post("/collabx-session", createCollabXSession);
+router.get("/collabx-session/:token", getCollabXSession);
+router.post("/collabx-session/:token/confirm", confirmCollabXSession);
 router.post("/order", createOrder);
 router.post("/verify", verifyOrderPayment);
 router.post("/failure", failPayment);

@@ -17,6 +17,7 @@ import {
   Search,
   Send,
   Sparkles,
+  Trash2,
   User,
 } from "lucide-react";
 
@@ -31,7 +32,13 @@ import toast from "react-hot-toast";
 import { AuthContext } from "../../context/AuthContext";
 import API from "../../services/api";
 import { storage } from "../../config/firebase";
-import { MCQWidget, SeatSelectionWidget, SummaryWidget } from "../../components/Chatbot/BookingWidgets";
+import {
+  CollabXPaymentWidget,
+  InputWidget,
+  MCQWidget,
+  SeatSelectionWidget,
+  SummaryWidget,
+} from "../../components/Chatbot/BookingWidgets";
 
 const welcomeMessage = {
   role: "assistant",
@@ -55,6 +62,35 @@ const createSession = () => ({
   updatedAt: new Date().toISOString(),
 });
 
+const normalizeSession = (session, index = 0) => ({
+  id: session?.id || `chat-${Date.now()}-${index}`,
+  title: session?.title || "New support chat",
+  messages:
+    Array.isArray(session?.messages) &&
+    session.messages.length
+      ? session.messages.map((message, messageIndex) => ({
+          id:
+            message.id ||
+            `${session?.id || "chat"}-${messageIndex}`,
+          role:
+            message.role ||
+            (message.sender === "bot" ? "assistant" : "user"),
+          text:
+            typeof message.text === "string"
+              ? message.text
+              : "",
+          attachments: Array.isArray(message.attachments)
+            ? message.attachments
+            : [],
+          widget: message.widget || null,
+        }))
+      : [welcomeMessage],
+  createdAt:
+    session?.createdAt || new Date().toISOString(),
+  updatedAt:
+    session?.updatedAt || new Date().toISOString(),
+});
+
 const loadSessions = () => {
   try {
     const saved = JSON.parse(
@@ -62,7 +98,7 @@ const loadSessions = () => {
     );
 
     return Array.isArray(saved) && saved.length
-      ? saved
+      ? saved.map(normalizeSession)
       : [createSession()];
   } catch {
     return [createSession()];
@@ -73,6 +109,9 @@ const buildTitle = (message) =>
   message.length > 36
     ? `${message.slice(0, 33)}...`
     : message || "New support chat";
+
+const apiBaseUrl =
+  import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 const AIChat = () => {
   const { user } = useContext(AuthContext);
@@ -85,6 +124,8 @@ const AIChat = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [attachments, setAttachments] = useState([]);
   const [latestMeta, setLatestMeta] = useState(null);
+  const [bookingDraft, setBookingDraft] = useState(null);
+  const [paymentLoading, setPaymentLoading] = useState(false);
   const [listening, setListening] = useState(false);
   const [showTools, setShowTools] = useState(true);
 
@@ -103,7 +144,9 @@ const AIChat = () => {
       sessions.filter((session) => {
         const haystack = [
           session.title,
-          ...session.messages.map((item) => item.text),
+          ...(session.messages || []).map(
+            (item) => item.text || ""
+          ),
         ]
           .join(" ")
           .toLowerCase();
@@ -135,8 +178,11 @@ const AIChat = () => {
           response.data.sessions || [];
 
         if (cloudSessions.length) {
-          setSessions(cloudSessions);
-          setActiveId(cloudSessions[0].id);
+          const normalizedSessions =
+            cloudSessions.map(normalizeSession);
+
+          setSessions(normalizedSessions);
+          setActiveId(normalizedSessions[0].id);
         }
       } catch (error) {
         console.log(
@@ -222,6 +268,27 @@ const AIChat = () => {
     setInput("");
     setAttachments([]);
     setLatestMeta(null);
+    setBookingDraft(null);
+  };
+
+  const handleDeleteChat = async (chatId) => {
+    const remaining = sessions.filter((session) => session.id !== chatId);
+    const nextSessions = remaining.length ? remaining : [createSession()];
+
+    setSessions(nextSessions);
+    if (activeId === chatId) {
+      setActiveId(nextSessions[0].id);
+      setLatestMeta(null);
+      setBookingDraft(null);
+    }
+
+    try {
+      await API.delete(`/chat/sessions/${chatId}`);
+    } catch (error) {
+      console.log("Cloud chat delete skipped", error);
+    }
+
+    toast.success("Chat deleted");
   };
 
   const handleFiles = (files) => {
@@ -355,6 +422,111 @@ const AIChat = () => {
     recognition.start();
   };
 
+  const appendAssistantMessage = (text, widget = null) => {
+    updateActiveSession((session) => ({
+      ...session,
+      messages: [
+        ...session.messages,
+        {
+          id: `assistant-${Date.now()}`,
+          role: "assistant",
+          text,
+          widget,
+        },
+      ],
+    }));
+  };
+
+  const completePaidTicket = (
+    booking,
+    paymentResponse,
+    details = [],
+    method = "upi"
+  ) => {
+    toast.success("Payment confirmed. Ticket generated.");
+    appendAssistantMessage(
+      "Payment successful. Your official CollabX e-ticket has been generated.",
+      {
+        type: "summary",
+        paid: true,
+        payment: {
+          orderId: paymentResponse.orderId,
+          paymentId: paymentResponse.paymentId,
+          bookingId: booking.id,
+          confirmationCode: booking.confirmationCode,
+        },
+        details: [
+          ...(details.length
+            ? details
+            : [`${booking.title}: ${bookingDraft?.seats?.join(", ") || ""}`]),
+          `Seats: ${bookingDraft?.seats?.join(", ") || "Selected seats"}`,
+          `Amount Paid: INR ${bookingDraft?.price || booking.pricing?.total || 0}`,
+          `Booking ID: ${booking.id}`,
+          `Confirmation: ${booking.confirmationCode}`,
+          `Payment Mode: CollabX ${method.toUpperCase()}`,
+        ],
+      }
+    );
+  };
+
+  const handleStartPayment = async (details = []) => {
+    if (!bookingDraft?.seats?.length || !bookingDraft?.price) {
+      toast.error("Select seats first so I can create the payment");
+      return;
+    }
+
+    setPaymentLoading(true);
+
+    try {
+      const type =
+        bookingDraft.mode === "train" ||
+        bookingDraft.mode === "bus" ||
+        bookingDraft.mode === "flight" ||
+        bookingDraft.mode === "movie"
+          ? bookingDraft.mode
+          : "event";
+
+      const bookingResponse = await API.post("/bookings", {
+        userId: user?.uid,
+        userEmail: user?.email,
+        type,
+        quantity: bookingDraft.seats.length,
+        selectedSeats: bookingDraft.seats,
+        totalAmount: bookingDraft.price,
+        title: latestMeta?.intent?.label || `${type} booking`,
+        travelDate: new Date().toISOString(),
+      });
+
+      const booking = bookingResponse.data.booking;
+      const paymentResponse = await API.post("/payments/collabx-session", {
+        bookingId: booking.id,
+        userId: user?.uid,
+        userEmail: user?.email,
+        amount: bookingDraft.price,
+        frontendOrigin: window.location.origin,
+      });
+
+      appendAssistantMessage(
+        "CollabX Payments is ready. Scan the QR code or use the Payment Done control to confirm the checkout.",
+        {
+          type: "collabx_payment",
+          session: paymentResponse.data.session,
+          booking,
+          details,
+        },
+      );
+    } catch (error) {
+      console.log(error);
+      toast.error(
+        error.response?.data?.message ||
+          error.message ||
+          "Payment could not start"
+      );
+    } finally {
+      setPaymentLoading(false);
+    }
+  };
+
   const handleSend = async (messageOverride) => {
     const currentMessage =
       (messageOverride || input).trim();
@@ -395,8 +567,153 @@ const AIChat = () => {
     setInput("");
     setAttachments([]);
 
+    let streamingAssistantId = null;
+
     try {
-      const response = await API.post("/chat", {
+      const assistantId = `assistant-${Date.now()}`;
+      streamingAssistantId = assistantId;
+
+      updateActiveSession((session) => ({
+        ...session,
+        messages: [
+          ...session.messages,
+          {
+            id: assistantId,
+            role: "assistant",
+            text: "",
+            widget: null,
+          },
+        ],
+      }));
+
+      const response = await fetch(`${apiBaseUrl}/chat/stream`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          message: currentMessage,
+          attachments: uploadedAttachments,
+          history: messages
+            .filter(
+              (item, index) =>
+                index !== 0 || item.role !== "assistant"
+            )
+            .slice(-10)
+            .map((item) => ({
+              role: item.role,
+              content: item.text,
+            })),
+        }),
+      });
+
+      if (!response.ok || !response.body) {
+        throw new Error("Streaming chat failed");
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffered = "";
+      let streamedText = "";
+      let finalResponse = null;
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        buffered += decoder.decode(value, { stream: true });
+        const lines = buffered.split("\n");
+        buffered = lines.pop() || "";
+
+        for (const line of lines) {
+          if (!line.trim()) continue;
+
+          const event = JSON.parse(line);
+
+          if (event.type === "chunk") {
+            streamedText += event.value;
+            updateActiveSession((session) => ({
+              ...session,
+              messages: session.messages.map((item) =>
+                item.id === assistantId
+                  ? {
+                      ...item,
+                      text: streamedText,
+                    }
+                  : item
+              ),
+            }));
+          }
+
+          if (event.type === "done") {
+            finalResponse = event.response;
+          }
+
+          if (event.type === "error") {
+            throw new Error(event.message);
+          }
+        }
+      }
+
+      if (!finalResponse) {
+        throw new Error("No response received");
+      }
+
+      setLatestMeta({
+        intent: finalResponse.intent,
+        ticketDraft: finalResponse.ticketDraft,
+        suggestions: finalResponse.suggestions,
+        usedWebSearch: finalResponse.usedWebSearch,
+      });
+
+      updateActiveSession((session) => ({
+        ...session,
+        messages: session.messages.map((item) =>
+          item.id === assistantId
+            ? {
+                ...item,
+                text:
+                  typeof finalResponse.reply === "string" &&
+                  finalResponse.reply.trim() !== ""
+                    ? finalResponse.reply
+                    : finalResponse.widget
+                    ? ""
+                    : "I could not generate a response right now.",
+                widget: finalResponse.widget || null,
+              }
+            : item
+        ),
+      }));
+
+      const sessionForBackup = {
+        ...activeSession,
+        userId: user?.uid || "anonymous",
+        messages: [
+          ...nextMessages,
+          {
+            id: assistantId,
+            role: "assistant",
+            text: finalResponse.reply || "",
+            widget: finalResponse.widget || null,
+          },
+        ],
+      };
+
+      saveSessionToBackend(sessionForBackup);
+    } catch (error) {
+      console.log(error);
+
+      if (streamingAssistantId) {
+        updateActiveSession((session) => ({
+          ...session,
+          messages: session.messages.filter(
+            (item) => item.id !== streamingAssistantId
+          ),
+        }));
+      }
+
+      try {
+        const response = await API.post("/chat", {
         message: currentMessage,
         attachments: uploadedAttachments,
         history: messages
@@ -409,53 +726,55 @@ const AIChat = () => {
             role: item.role,
             content: item.text,
           })),
-      });
+        });
 
-      setLatestMeta({
-        intent: response.data.intent,
-        ticketDraft: response.data.ticketDraft,
-        suggestions: response.data.suggestions,
-        usedWebSearch: response.data.usedWebSearch,
-      });
+        setLatestMeta({
+          intent: response.data.intent,
+          ticketDraft: response.data.ticketDraft,
+          suggestions: response.data.suggestions,
+          usedWebSearch: response.data.usedWebSearch,
+        });
 
-      addAssistantWithTyping(
-        typeof response.data.reply === "string" && response.data.reply.trim() !== ""
-          ? response.data.reply
-          : response.data.widget
-          ? ""
-          : "I could not generate a response right now.",
-        response.data.widget
-      );
+        addAssistantWithTyping(
+          typeof response.data.reply === "string" &&
+            response.data.reply.trim() !== ""
+            ? response.data.reply
+            : response.data.widget
+            ? ""
+            : "I could not generate a response right now.",
+          response.data.widget
+        );
 
-      const sessionForBackup = {
-        ...activeSession,
-        userId: user?.uid || "anonymous",
-        messages: [
-          ...nextMessages,
-          {
-            role: "assistant",
-            text: response.data.reply || "",
-            widget: response.data.widget || null,
-          },
-        ],
-      };
+        const sessionForBackup = {
+          ...activeSession,
+          userId: user?.uid || "anonymous",
+          messages: [
+            ...nextMessages,
+            {
+              role: "assistant",
+              text: response.data.reply || "",
+              widget: response.data.widget || null,
+            },
+          ],
+        };
 
-      saveSessionToBackend(sessionForBackup);
-    } catch (error) {
-      console.log(error);
+        saveSessionToBackend(sessionForBackup);
+      } catch (fallbackError) {
+        console.log(fallbackError);
 
-      addAssistantWithTyping(
-        "I cannot reach the AI backend right now. Your chat is still saved locally. Please try again in a moment."
-      );
+        addAssistantWithTyping(
+          "I cannot reach the AI backend right now. Your chat is still saved locally. Please try again in a moment."
+        );
+      }
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <section className="min-h-screen bg-black text-white flex">
-      <div className="hidden lg:flex w-[340px] border-r border-gray-800 bg-[#050505] flex-col">
-        <div className="p-5 border-b border-gray-800">
+    <section className="h-screen overflow-hidden bg-[radial-gradient(circle_at_20%_0%,rgba(14,165,233,0.16),transparent_34%),radial-gradient(circle_at_90%_20%,rgba(16,185,129,0.10),transparent_28%),#020617] text-white flex">
+      <div className="hidden lg:flex w-[340px] border-r border-white/10 bg-black/50 backdrop-blur-xl flex-col">
+        <div className="p-5 border-b border-white/10">
           <div className="flex items-center justify-between mb-5">
             <h2 className="text-2xl font-bold gradient-text">
               CollabX AI
@@ -487,29 +806,41 @@ const AIChat = () => {
 
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
           {filteredSessions.map((chat) => (
-            <button
+            <div
               key={chat.id}
-              onClick={() => setActiveId(chat.id)}
-              className={`w-full text-left border rounded-2xl p-4 transition ${
+              className={`group flex items-center gap-2 border rounded-2xl p-3 transition ${
                 chat.id === activeId
-                  ? "bg-[#111111] border-blue-500"
-                  : "bg-[#0a0a0a] hover:bg-[#111111] border-gray-800"
+                  ? "bg-sky-500/10 border-sky-400/60"
+                  : "bg-white/[0.03] hover:bg-white/[0.06] border-white/10"
               }`}
             >
-              <p className="font-semibold truncate">
-                {chat.title}
-              </p>
-              <p className="text-xs text-gray-500 mt-1">
-                {chat.messages.length} messages
-              </p>
-            </button>
+              <button
+                onClick={() => setActiveId(chat.id)}
+                className="min-w-0 flex-1 text-left"
+              >
+                <p className="font-semibold truncate">
+                  {chat.title}
+                </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  {chat.messages.length} messages
+                </p>
+              </button>
+              <button
+                onClick={() => handleDeleteChat(chat.id)}
+                title="Delete chat"
+                aria-label={`Delete ${chat.title}`}
+                className="w-9 h-9 rounded-xl border border-gray-800 text-gray-500 hover:text-red-300 hover:border-red-500/60 hover:bg-red-500/10 flex items-center justify-center opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition"
+              >
+                <Trash2 size={16} />
+              </button>
+            </div>
           ))}
         </div>
 
         <div className="p-5 border-t border-gray-800">
           <Link
             to="/dashboard"
-            className="flex items-center gap-4 bg-[#0a0a0a] border border-gray-800 rounded-2xl p-4 hover:border-blue-500 transition"
+            className="flex items-center gap-4 bg-white/[0.04] border border-white/10 rounded-2xl p-4 hover:border-sky-400 transition"
           >
             <ArrowLeft size={20} />
             Back To Dashboard
@@ -518,9 +849,9 @@ const AIChat = () => {
       </div>
 
       <div className="flex-1 flex flex-col">
-        <div className="border-b border-gray-800 bg-[#050505] px-6 py-5 flex items-center justify-between">
+        <div className="border-b border-white/10 bg-black/45 backdrop-blur-xl px-6 py-5 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-r from-blue-600 to-purple-700 flex items-center justify-center">
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-sky-500 to-emerald-500 flex items-center justify-center shadow-lg shadow-sky-500/20">
               <Bot size={28} />
             </div>
 
@@ -530,7 +861,7 @@ const AIChat = () => {
               </h2>
 
               <p className="text-gray-400">
-                SARVAM AI with Tavily web intelligence
+                Booking, refund, complaint, and ticket workflows
               </p>
             </div>
           </div>
@@ -551,7 +882,7 @@ const AIChat = () => {
           <div className="max-w-5xl mx-auto space-y-6">
             {showTools && (
               <div className="grid md:grid-cols-3 gap-4">
-                <div className="bg-[#0a0a0a] border border-gray-800 rounded-2xl p-4">
+                <div className="bg-white/[0.04] border border-white/10 rounded-2xl p-4">
                   <p className="text-sm text-gray-400">
                     Smart intent
                   </p>
@@ -561,7 +892,7 @@ const AIChat = () => {
                   </p>
                 </div>
 
-                <div className="bg-[#0a0a0a] border border-gray-800 rounded-2xl p-4">
+                <div className="bg-white/[0.04] border border-white/10 rounded-2xl p-4">
                   <p className="text-sm text-gray-400">
                     Ticket draft
                   </p>
@@ -581,7 +912,7 @@ const AIChat = () => {
                   </div>
                 </div>
 
-                <div className="bg-[#0a0a0a] border border-gray-800 rounded-2xl p-4">
+                <div className="bg-white/[0.04] border border-white/10 rounded-2xl p-4">
                   <p className="text-sm text-gray-400">
                     Booking action
                   </p>
@@ -622,14 +953,20 @@ const AIChat = () => {
                 )}
 
                 <div
-                  className={`max-w-3xl rounded-[26px] p-5 text-base leading-8 whitespace-pre-wrap ${
+                  className={`max-w-3xl rounded-3xl p-5 text-base leading-8 whitespace-pre-wrap shadow-lg ${
                     message.role === "user"
-                      ? "bg-blue-600"
-                      : "bg-[#0a0a0a] border border-gray-800"
+                      ? "bg-sky-500 text-white shadow-sky-950/30"
+                      : "bg-white/[0.05] border border-white/10 shadow-black/20"
                   }`}
                 >
                   {message.text}
 
+                  {message.widget && message.widget.type === "input" && (
+                    <InputWidget
+                      onSubmit={(val) => handleSend(val)}
+                      disabled={index !== messages.length - 1 || loading}
+                    />
+                  )}
                   {message.widget && message.widget.type === "mcq" && (
                     <MCQWidget
                       options={message.widget.options}
@@ -639,15 +976,46 @@ const AIChat = () => {
                   {message.widget && message.widget.type === "seat_selection" && (
                     <SeatSelectionWidget
                       mode={message.widget.mode}
-                      onConfirm={(seats, price) => handleSend(`I selected seats: ${seats.join(', ')} for ₹${price}. Please provide the summary.`)}
+                      onConfirm={(seats, price) => {
+                        setBookingDraft({
+                          mode: message.widget.mode,
+                          seats,
+                          price,
+                        });
+                        handleSend(
+                          `I selected seats: ${seats.join(", ")} for INR ${price}. Please provide the summary.`
+                        );
+                      }}
                     />
                   )}
                   {message.widget && message.widget.type === "summary" && (
                     <SummaryWidget
                       details={message.widget.details}
-                      onContinue={() => handleSend(`Proceed to payment`)}
+                      paid={message.widget.paid}
+                      payment={message.widget.payment}
+                      paymentLoading={paymentLoading}
+                      userName={user?.displayName || "Guest Passenger"}
+                      onContinue={() =>
+                        handleStartPayment(message.widget.details)
+                      }
                     />
                   )}
+                  {message.widget &&
+                    message.widget.type === "collabx_payment" && (
+                      <CollabXPaymentWidget
+                        session={message.widget.session}
+                        booking={message.widget.booking}
+                        details={message.widget.details}
+                        onSuccess={(paymentResponse) =>
+                          completePaidTicket(
+                            message.widget.booking,
+                            paymentResponse,
+                            message.widget.details,
+                            paymentResponse.method
+                          )
+                        }
+                      />
+                    )}
 
                   {!!message.attachments?.length && (
                     <div className="mt-3 space-y-2 text-sm opacity-90">
@@ -688,14 +1056,14 @@ const AIChat = () => {
           </div>
         </div>
 
-        <div className="border-t border-gray-800 bg-[#050505] p-5">
+        <div className="border-t border-white/10 bg-black/55 backdrop-blur-xl p-5">
           <div className="max-w-5xl mx-auto">
             <div className="flex gap-3 overflow-x-auto pb-4">
               {activeSuggestions.map((suggestion) => (
                 <button
                   key={suggestion}
                   onClick={() => handleSend(suggestion)}
-                  className="shrink-0 border border-gray-700 hover:border-blue-500 transition px-4 py-2 rounded-2xl text-sm bg-[#0a0a0a]"
+                  className="shrink-0 border border-white/10 hover:border-sky-400 transition px-4 py-2 rounded-2xl text-sm bg-white/[0.04]"
                 >
                   {suggestion}
                 </button>
@@ -774,7 +1142,7 @@ const AIChat = () => {
               }
             />
 
-            <div className="bg-[#0a0a0a] border border-gray-800 rounded-[26px] p-4 flex items-end gap-4">
+            <div className="bg-white/[0.05] border border-white/10 rounded-3xl p-4 flex items-end gap-4 shadow-2xl shadow-sky-950/20">
               <textarea
                 rows="1"
                 placeholder="Message CollabX AI..."
@@ -797,7 +1165,7 @@ const AIChat = () => {
               <button
                 onClick={() => handleSend()}
                 disabled={loading}
-                className="w-16 h-16 rounded-2xl bg-gradient-to-r from-blue-600 to-purple-700 flex items-center justify-center hover:scale-105 transition disabled:opacity-50"
+                className="w-16 h-16 rounded-2xl bg-gradient-to-br from-sky-500 to-emerald-500 flex items-center justify-center hover:scale-105 transition disabled:opacity-50"
               >
                 <Send size={24} />
               </button>

@@ -15,6 +15,16 @@ const intentRules = [
     keywords: ["hotel", "room", "check-in", "checkin", "stay"],
   },
   {
+    intent: "train_booking",
+    label: "Train booking",
+    keywords: ["train", "railway", "pnr", "coach", "berth"],
+  },
+  {
+    intent: "bus_booking",
+    label: "Bus booking",
+    keywords: ["bus", "coach", "sleeper", "seater"],
+  },
+  {
     intent: "event_booking",
     label: "Event booking",
     keywords: ["event", "show", "venue"],
@@ -141,6 +151,16 @@ export const getQuickSuggestions = (intent = {}) => {
       "Suggest hotels for my dates",
       "Help with hotel cancellation",
       "Create a hotel support ticket",
+    ],
+    train_booking: [
+      "Find train options",
+      "Compare berth availability",
+      "Create a train support ticket",
+    ],
+    bus_booking: [
+      "Find bus options",
+      "Compare sleeper seats",
+      "Create a bus support ticket",
     ],
     event_booking: [
       "Find nearby events",

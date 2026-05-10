@@ -1,3 +1,5 @@
+import crypto from "crypto";
+
 import {
   firestore,
 } from "../config/firebaseAdmin.js";
@@ -9,6 +11,11 @@ import {
 } from "./emailService.js";
 
 const bookings = firestore.collection("bookings");
+
+const REFUND_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+const createRefundToken = () =>
+  crypto.randomBytes(24).toString("hex");
 
 const bookingCatalog = {
   movie: {
@@ -141,10 +148,23 @@ export const getBookingRecommendations = ({
 
 const serializeBooking = (doc) => {
   const data = doc.data();
+  const refundInitiatedAt =
+    data.refundInitiatedAt?.toDate?.() ||
+    (data.refundInitiatedAt
+      ? new Date(data.refundInitiatedAt)
+      : null);
+  const refundReady =
+    refundInitiatedAt &&
+    Date.now() - refundInitiatedAt.getTime() >= REFUND_WINDOW_MS;
+  const refundStatus =
+    data.refundStatus === "initiated" && refundReady
+      ? "successful"
+      : data.refundStatus;
 
   return {
     id: doc.id,
     ...data,
+    refundStatus,
     createdAt:
       data.createdAt?.toDate?.().toISOString?.() ||
       data.createdAt ||
@@ -157,12 +177,46 @@ const serializeBooking = (doc) => {
       data.travelDate?.toDate?.().toISOString?.() ||
       data.travelDate ||
       null,
+    cancellationRequestedAt:
+      data.cancellationRequestedAt?.toDate?.().toISOString?.() ||
+      data.cancellationRequestedAt ||
+      null,
+    refundInitiatedAt:
+      data.refundInitiatedAt?.toDate?.().toISOString?.() ||
+      data.refundInitiatedAt ||
+      null,
+    refundCompletedAt:
+      refundStatus === "successful" && refundInitiatedAt
+        ? new Date(
+            refundInitiatedAt.getTime() + REFUND_WINDOW_MS
+          ).toISOString()
+        : data.refundCompletedAt?.toDate?.().toISOString?.() ||
+          data.refundCompletedAt ||
+          null,
   };
 };
 
 export const createBooking = async (payload = {}) => {
   const type = normalizeType(payload.type);
   const quantity = Math.max(Number(payload.quantity || 1), 1);
+  const selectedSeats = Array.isArray(payload.selectedSeats)
+    ? payload.selectedSeats
+        .map((seat) => String(seat).trim())
+        .filter(Boolean)
+        .slice(0, 12)
+    : [];
+  const customTotal = Number(payload.totalAmount || 0);
+  const calculatedPricing = calculatePricing(type, quantity);
+  const pricing =
+    customTotal > 0
+      ? {
+          ...calculatedPricing,
+          quantity,
+          subtotal: customTotal,
+          platformFee: 0,
+          total: customTotal,
+        }
+      : calculatedPricing;
   const availability = calculateAvailability(type, quantity);
 
   if (!availability.available) {
@@ -188,10 +242,11 @@ export const createBooking = async (payload = {}) => {
     source: payload.source || "",
     travelDate: payload.travelDate || "",
     quantity,
+    selectedSeats,
     status: "confirmed",
     confirmationCode,
     availability,
-    pricing: calculatePricing(type, quantity),
+    pricing,
     recommendation:
       payload.recommendation ||
       getBookingRecommendations({
@@ -246,6 +301,33 @@ export const getUserBookings = async (userId) => {
     );
 };
 
+export const getBookingById = async (id) => {
+  const doc = await bookings.doc(id).get();
+
+  if (!doc.exists) return null;
+
+  const booking = serializeBooking(doc);
+
+  if (
+    booking.refundStatus === "successful" &&
+    doc.data().refundStatus !== "successful"
+  ) {
+    await bookings.doc(id).set(
+      {
+        refundStatus: "successful",
+        refundCompletedAt:
+          booking.refundCompletedAt || new Date(),
+        updatedAt: new Date(),
+      },
+      {
+        merge: true,
+      }
+    );
+  }
+
+  return booking;
+};
+
 export const cancelBooking = async (id, reason = "") => {
   const docRef = bookings.doc(id);
   const existing = await docRef.get();
@@ -285,6 +367,145 @@ export const cancelBooking = async (id, reason = "") => {
   }
 
   return booking;
+};
+
+export const requestCancellationVerification = async ({
+  id,
+  reason = "",
+  frontendOrigin,
+} = {}) => {
+  const docRef = bookings.doc(id);
+  const existing = await docRef.get();
+
+  if (!existing.exists) return null;
+
+  const booking = serializeBooking(existing);
+  const token = createRefundToken();
+  const total = Number(booking.pricing?.total || 0);
+  const refundAmount = Math.round(total * 0.5);
+  const origin =
+    frontendOrigin ||
+    process.env.FRONTEND_URL ||
+    "http://localhost:5173";
+  const confirmationUrl = `${origin.replace(
+    /\/$/,
+    ""
+  )}/refund-confirm/${token}`;
+
+  await docRef.set(
+    {
+      cancellationReason: reason,
+      cancellationRequestedAt: new Date(),
+      cancellationVerificationToken: token,
+      cancellationVerificationUrl: confirmationUrl,
+      refundStatus: "email_verification_pending",
+      refundAmount,
+      refundablePercent: 50,
+      updatedAt: new Date(),
+    },
+    {
+      merge: true,
+    }
+  );
+
+  const saved = serializeBooking(await docRef.get());
+
+  await trackActivity({
+    userId: saved.userId,
+    type: "refund_email_sent",
+    title: "Refund email verification sent",
+    description: `${saved.title} needs email confirmation before cancellation.`,
+    metadata: {
+      bookingId: saved.id,
+      refundAmount,
+    },
+  });
+
+  let email = {
+    sent: false,
+    reason: "No registered email on booking",
+  };
+
+  if (saved.userEmail) {
+    email = await sendEmailNotification({
+      to: saved.userEmail,
+      subject: "Confirm your CollabX cancellation",
+      text: `Confirm cancellation for ${saved.confirmationCode}: ${confirmationUrl}. Only 50% is refundable. Refund amount: INR ${refundAmount}.`,
+      html: `<p>Confirm cancellation for <strong>${saved.confirmationCode}</strong>.</p><p>Only 50% is refundable. Refund amount: <strong>INR ${refundAmount}</strong>.</p><p><a href="${confirmationUrl}">Confirm cancellation</a></p>`,
+    });
+  }
+
+  return {
+    booking: saved,
+    email,
+    confirmationUrl: email.sent ? undefined : confirmationUrl,
+  };
+};
+
+export const getCancellationByToken = async (token) => {
+  const snapshot = await bookings
+    .where("cancellationVerificationToken", "==", token)
+    .limit(1)
+    .get();
+
+  if (snapshot.empty) return null;
+
+  return serializeBooking(snapshot.docs[0]);
+};
+
+export const confirmCancellationByToken = async (token) => {
+  const snapshot = await bookings
+    .where("cancellationVerificationToken", "==", token)
+    .limit(1)
+    .get();
+
+  if (snapshot.empty) return null;
+
+  const doc = snapshot.docs[0];
+  const booking = serializeBooking(doc);
+  const total = Number(booking.pricing?.total || 0);
+  const refundAmount =
+    Number(booking.refundAmount || 0) ||
+    Math.round(total * 0.5);
+  const now = new Date();
+
+  await doc.ref.set(
+    {
+      status: "cancelled",
+      refundStatus: "initiated",
+      refundAmount,
+      refundablePercent: 50,
+      refundInitiatedAt: now,
+      cancellationVerifiedAt: now,
+      updatedAt: now,
+    },
+    {
+      merge: true,
+    }
+  );
+
+  const saved = serializeBooking(await doc.ref.get());
+
+  await trackActivity({
+    userId: saved.userId,
+    type: "refund_initiated",
+    title: "Ticket cancelled and refund initiated",
+    description: `${saved.confirmationCode} cancelled. INR ${refundAmount} refund will complete in 24 hrs.`,
+    metadata: {
+      bookingId: saved.id,
+      refundAmount,
+    },
+  });
+
+  if (saved.userEmail) {
+    await sendEmailNotification({
+      to: saved.userEmail,
+      subject: "CollabX refund initiated",
+      text: `Ticket successfully cancelled. Refund of INR ${refundAmount} has been initiated and will take 24 hrs.`,
+    });
+  }
+
+  return saved;
 };
 
 export const requestRefund = async (id, reason = "") => {

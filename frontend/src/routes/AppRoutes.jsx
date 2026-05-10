@@ -13,7 +13,11 @@ import Signup from "../pages/Signup/Signup";
 import Dashboard from "../pages/Dashboard/Dashboard";
 import NotFound from "../pages/NotFound/NotFound";
 import SetupLoader from "../pages/SetupLoader/SetupLoader";
+import VerifyEmail from "../pages/Auth/VerifyEmail";
 import AIChat from "../pages/AIChat/AIChat";
+import PaymentConfirm from "../pages/PaymentConfirm/PaymentConfirm";
+import RefundRequest from "../pages/Refund/RefundRequest";
+import RefundConfirm from "../pages/Refund/RefundConfirm";
 import ProtectedRoute from "./ProtectedRoute";
 
 const AppRoutes = () => {
@@ -28,11 +32,22 @@ const AppRoutes = () => {
         <Route path="terms-and-conditions" element={<TermsConditions />} />
         <Route path="login" element={<Login />} />
         <Route path="signup" element={<Signup />} />
+        <Route path="verify-email" element={<VerifyEmail />} />
+        <Route path="payment-confirm/:token" element={<PaymentConfirm />} />
+        <Route path="refund-confirm/:token" element={<RefundConfirm />} />
         <Route
           path="dashboard"
           element={
             <ProtectedRoute>
               <Dashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="refund/:id"
+          element={
+            <ProtectedRoute>
+              <RefundRequest />
             </ProtectedRoute>
           }
         />

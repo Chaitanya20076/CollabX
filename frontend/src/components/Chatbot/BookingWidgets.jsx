@@ -1,137 +1,1011 @@
-import { useState } from "react";
+import { useRef, useState, useEffect } from "react";
+import { motion } from "framer-motion";
+import QRCode from "qrcode";
+import {
+  CheckCircle2,
+  CreditCard,
+  Download,
+  Loader2,
+  QrCode,
+  Send,
+  ShieldCheck,
+  Smartphone,
+  Ticket,
+} from "lucide-react";
+import { jsPDF } from "jspdf";
 
-export const MCQWidget = ({ options, onSelect }) => {
+import API from "../../services/api";
+
+// --- INPUT WIDGET: INLINE TEXT REPLY ---
+export const InputWidget = ({ onSubmit, disabled }) => {
+  const [value, setValue] = useState("");
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (value.trim() && !disabled) {
+      onSubmit(value.trim());
+      setValue("");
+    }
+  };
+
+  const unusedTicketDownloadTemplate = async () => {
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const safeDetails = details.map((detail) =>
+      String(detail).replace(/₹|â‚¹/g, "INR ")
+    );
+
+    doc.setFillColor(7, 10, 18);
+    doc.rect(0, 0, 210, 297, "F");
+    doc.setFillColor(14, 23, 42);
+    doc.roundedRect(12, 16, 186, 248, 8, 8, "F");
+    doc.setDrawColor(37, 99, 235);
+    doc.setLineWidth(0.8);
+    doc.roundedRect(12, 16, 186, 248, 8, 8);
+
+    doc.setFillColor(37, 99, 235);
+    doc.roundedRect(12, 16, 186, 42, 8, 8, "F");
+    doc.setFillColor(124, 58, 237);
+    doc.rect(120, 16, 78, 42, "F");
+
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(24);
+    doc.text("COLLABX", 24, 34);
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "normal");
+    doc.text(paid ? "OFFICIAL VERIFIED E-TICKET" : "BOOKING DRAFT - PAYMENT PENDING", 24, 45);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(15);
+    doc.text(paid ? "PAID" : "READY", 178, 34, { align: "right" });
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.text(ticketId, 178, 44, { align: "right" });
+
+    doc.setFillColor(255, 255, 255);
+    doc.roundedRect(22, 72, 166, 76, 5, 5, "F");
+    doc.setTextColor(100, 116, 139);
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "bold");
+    doc.text("PASSENGER", 30, 86);
+    doc.text("PNR / REF", 118, 86);
+    doc.text("CLASS", 30, 116);
+    doc.text("GATE / ZONE", 82, 116);
+    doc.text("STATUS", 138, 116);
+
+    doc.setTextColor(15, 23, 42);
+    doc.setFontSize(14);
+    doc.text(userName, 30, 96);
+    doc.text(pnr, 118, 96);
+    doc.setFontSize(12);
+    doc.text(ticketClass, 30, 126);
+    doc.text(gate, 82, 126);
+    doc.setTextColor(paid ? 22 : 234, paid ? 163 : 179, paid ? 74 : 8);
+    doc.text(paid ? "PAID" : "PENDING", 138, 126);
+
+    doc.setTextColor(226, 232, 240);
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "bold");
+    doc.text("BOOKING DETAILS", 24, 164);
+    doc.setDrawColor(51, 65, 85);
+    doc.line(24, 168, 186, 168);
+
+    let y = 180;
+    safeDetails.slice(0, 7).forEach((detail) => {
+      const parts = detail.split(":");
+      const label = parts.length > 1 ? parts[0].trim() : "DETAIL";
+      const value = parts.length > 1 ? parts.slice(1).join(":").trim() : detail;
+
+      doc.setTextColor(148, 163, 184);
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "bold");
+      doc.text(label.toUpperCase(), 24, y);
+      doc.setTextColor(248, 250, 252);
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "normal");
+      doc.text(doc.splitTextToSize(value, 122), 62, y);
+      y += 13;
+    });
+
+    if (paid && payment?.paymentId) {
+      doc.setFillColor(5, 46, 22);
+      doc.roundedRect(24, 220, 112, 22, 4, 4, "F");
+      doc.setTextColor(187, 247, 208);
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "bold");
+      doc.text("VERIFIED PAYMENT", 30, 229);
+      doc.setFont("helvetica", "normal");
+      doc.text(String(payment.paymentId).slice(0, 42), 30, 237);
+    }
+
+    try {
+      const baseUrl = typeof window !== "undefined" ? window.location.origin : "http://localhost:5173";
+      const verificationUrl = `${baseUrl}/verify/${ticketId}`;
+      const qrDataUrl = await QRCode.toDataURL(verificationUrl, {
+        errorCorrectionLevel: "M",
+        margin: 1,
+      });
+
+      doc.setFillColor(255, 255, 255);
+      doc.roundedRect(146, 196, 36, 36, 4, 4, "F");
+      doc.addImage(qrDataUrl, "PNG", 150, 200, 28, 28);
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(148, 163, 184);
+      doc.text("SCAN TO VERIFY", 164, 240, { align: "center" });
+    } catch (err) {
+      console.error("Failed to generate QR code", err);
+    }
+
+    doc.setDrawColor(51, 65, 85);
+    doc.setLineDashPattern([2, 2], 0);
+    doc.line(18, 252, 192, 252);
+    doc.setLineDashPattern([], 0);
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(148, 163, 184);
+    doc.text(`Issued ${bookingTime}`, 24, 260);
+    doc.text(
+      "Carry a valid ID. This ticket is generated by CollabX booking automation.",
+      pageWidth / 2,
+      278,
+      { align: "center" }
+    );
+
+    doc.save(`CollabX_${paid ? "Official_E_Ticket" : "Ticket_Draft"}_${ticketId}.pdf`);
+  };
+
+  const handleDownload = async () => {
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const safeDetails = details.map((detail) =>
+      String(detail).replace(/₹|â‚¹/g, "INR ")
+    );
+
+    doc.setFillColor(7, 10, 18);
+    doc.rect(0, 0, 210, 297, "F");
+    doc.setFillColor(14, 23, 42);
+    doc.roundedRect(12, 16, 186, 248, 8, 8, "F");
+    doc.setDrawColor(37, 99, 235);
+    doc.setLineWidth(0.8);
+    doc.roundedRect(12, 16, 186, 248, 8, 8);
+
+    doc.setFillColor(37, 99, 235);
+    doc.roundedRect(12, 16, 186, 42, 8, 8, "F");
+    doc.setFillColor(124, 58, 237);
+    doc.rect(120, 16, 78, 42, "F");
+
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(24);
+    doc.text("COLLABX", 24, 34);
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "normal");
+    doc.text(paid ? "OFFICIAL VERIFIED E-TICKET" : "BOOKING DRAFT - PAYMENT PENDING", 24, 45);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(15);
+    doc.text(paid ? "PAID" : "READY", 178, 34, { align: "right" });
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.text(ticketId, 178, 44, { align: "right" });
+
+    doc.setFillColor(255, 255, 255);
+    doc.roundedRect(22, 72, 166, 76, 5, 5, "F");
+    doc.setTextColor(100, 116, 139);
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "bold");
+    doc.text("PASSENGER", 30, 86);
+    doc.text("PNR / REF", 118, 86);
+    doc.text("CLASS", 30, 116);
+    doc.text("GATE / ZONE", 82, 116);
+    doc.text("STATUS", 138, 116);
+
+    doc.setTextColor(15, 23, 42);
+    doc.setFontSize(14);
+    doc.text(userName, 30, 96);
+    doc.text(pnr, 118, 96);
+    doc.setFontSize(12);
+    doc.text(ticketClass, 30, 126);
+    doc.text(gate, 82, 126);
+    doc.setTextColor(paid ? 22 : 234, paid ? 163 : 179, paid ? 74 : 8);
+    doc.text(paid ? "PAID" : "PENDING", 138, 126);
+
+    doc.setTextColor(226, 232, 240);
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "bold");
+    doc.text("BOOKING DETAILS", 24, 164);
+    doc.setDrawColor(51, 65, 85);
+    doc.line(24, 168, 186, 168);
+
+    let y = 180;
+    safeDetails.slice(0, 7).forEach((detail) => {
+      const parts = detail.split(":");
+      const label = parts.length > 1 ? parts[0].trim() : "DETAIL";
+      const value = parts.length > 1 ? parts.slice(1).join(":").trim() : detail;
+
+      doc.setTextColor(148, 163, 184);
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "bold");
+      doc.text(label.toUpperCase(), 24, y);
+      doc.setTextColor(248, 250, 252);
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "normal");
+      doc.text(doc.splitTextToSize(value, 122), 62, y);
+      y += 13;
+    });
+
+    if (paid && payment?.paymentId) {
+      doc.setFillColor(5, 46, 22);
+      doc.roundedRect(24, 220, 112, 22, 4, 4, "F");
+      doc.setTextColor(187, 247, 208);
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "bold");
+      doc.text("VERIFIED PAYMENT", 30, 229);
+      doc.setFont("helvetica", "normal");
+      doc.text(String(payment.paymentId).slice(0, 42), 30, 237);
+    }
+
+    try {
+      const baseUrl = typeof window !== "undefined" ? window.location.origin : "http://localhost:5173";
+      const verificationUrl = `${baseUrl}/verify/${ticketId}`;
+      const qrDataUrl = await QRCode.toDataURL(verificationUrl, {
+        errorCorrectionLevel: "M",
+        margin: 1,
+      });
+
+      doc.setFillColor(255, 255, 255);
+      doc.roundedRect(146, 196, 36, 36, 4, 4, "F");
+      doc.addImage(qrDataUrl, "PNG", 150, 200, 28, 28);
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(148, 163, 184);
+      doc.text("SCAN TO VERIFY", 164, 240, { align: "center" });
+    } catch (err) {
+      console.error("Failed to generate QR code", err);
+    }
+
+    doc.setDrawColor(51, 65, 85);
+    doc.setLineDashPattern([2, 2], 0);
+    doc.line(18, 252, 192, 252);
+    doc.setLineDashPattern([], 0);
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(148, 163, 184);
+    doc.text(`Issued ${bookingTime}`, 24, 260);
+    doc.text(
+      "Carry a valid ID. This ticket is generated by CollabX booking automation.",
+      pageWidth / 2,
+      278,
+      { align: "center" }
+    );
+
+    doc.save(`CollabX_${paid ? "Official_E_Ticket" : "Ticket_Draft"}_${ticketId}.pdf`);
+  };
+
   return (
-    <div className="flex flex-col gap-2 mt-2">
-      {options.map((opt, idx) => (
-        <button
-          key={idx}
-          onClick={() => onSelect(opt)}
-          className="bg-[#2a2a2a] hover:bg-blue-600 border border-gray-700 rounded-xl px-4 py-2 text-sm text-left transition-colors"
-        >
-          {opt}
-        </button>
-      ))}
-    </div>
+    <motion.form 
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      onSubmit={handleSubmit}
+      className={`mt-3 flex items-center gap-2 bg-white/5 border border-white/10 p-1.5 rounded-2xl backdrop-blur-md transition-all ${disabled ? 'opacity-50 pointer-events-none' : 'focus-within:border-blue-500/50 focus-within:bg-white/10'}`}
+    >
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        disabled={disabled}
+        placeholder="Type your answer..."
+        className="flex-1 bg-transparent border-none outline-none text-white text-sm px-3 placeholder-gray-500"
+        autoFocus
+      />
+      <button
+        type="submit"
+        disabled={!value.trim() || disabled}
+        className="p-2 bg-blue-600 hover:bg-blue-500 disabled:bg-white/5 disabled:text-gray-500 text-white rounded-xl transition-colors"
+      >
+        <Send size={16} />
+      </button>
+    </motion.form>
   );
 };
 
+// --- MCQ WIDGET: NEON NEUMORPHISM ---
+export const MCQWidget = ({ options, onSelect }) => {
+  return (
+    <motion.div 
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="flex flex-col gap-3 mt-3 w-full"
+    >
+      {options.map((opt, idx) => (
+        <motion.button
+          key={idx}
+          whileHover={{ scale: 1.02, x: 5 }}
+          whileTap={{ scale: 0.98 }}
+          onClick={() => onSelect(opt)}
+          className="group relative overflow-hidden bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl px-5 py-4 text-sm text-left transition-all duration-300 backdrop-blur-md"
+        >
+          <div className="absolute inset-0 bg-gradient-to-r from-blue-600/20 to-purple-600/20 opacity-0 group-hover:opacity-100 transition-opacity" />
+          <span className="relative z-10 font-medium text-gray-200 group-hover:text-white flex items-center gap-3">
+            <div className="w-2 h-2 rounded-full bg-blue-500 group-hover:shadow-[0_0_8px_#3b82f6]" />
+            {opt}
+          </span>
+        </motion.button>
+      ))}
+    </motion.div>
+  );
+};
+
+// --- AUTHENTIC SEATING LAYOUTS ---
 export const SeatSelectionWidget = ({ mode = 'movie', onConfirm }) => {
   const [selected, setSelected] = useState([]);
   
-  const getLayoutConfig = (m) => {
-    switch (m) {
-      case 'flight':
-        return {
-          rows: ['1', '2', '3', '4', '5', '6', '7', '8'],
-          cols: ['A', 'B', 'C', 'GAP', 'D', 'E', 'F'],
-          pricePerSeat: 4500,
-          label: "Cockpit / Front"
-        };
-      case 'movie':
-      default:
-        return {
-          rows: ['A', 'B', 'C', 'D', 'E', 'F'],
-          cols: ['1', '2', '3', '4', 'GAP', '5', '6', '7', '8'],
-          pricePerSeat: 250,
-          label: "Screen / Stage"
-        };
-    }
+  const configs = {
+    movie: { price: 250, label: "SCREEN" },
+    flight: { price: 4500, label: "COCKPIT" },
+    bus: { price: 800, label: "DRIVER" },
+    train: { price: 1200, label: "TRAIN ENGINE" },
+    event: { price: 3000, label: "STAGE" }
   };
+  const config = configs[mode] || configs['movie'];
 
-  const config = getLayoutConfig(mode);
-
-  // Fake state for occupied seats generated once per component mount
-  const [occupiedSeats] = useState(() => {
-    const occupied = [];
-    config.rows.forEach(r => {
-      config.cols.forEach(c => {
-        if (c !== 'GAP' && Math.random() > 0.7) occupied.push(`${r}${c}`); // 30% chance occupied
+  // Generate a stable occupancy map based on mode
+  const [occupiedMap] = useState(() => {
+    const map = {};
+    const allSeats = [];
+    if (mode === 'train') {
+      [1, 2].forEach(comp => {
+         ['L','M','U'].forEach(b => { allSeats.push(`${comp}A-${b}`, `${comp}B-${b}`); });
+         allSeats.push(`${comp}-SL`, `${comp}-SU`);
       });
-    });
-    return occupied;
+    } else if (mode === 'bus') {
+      [1,2,3,4,5].forEach(r => { allSeats.push(`${r}W`, `${r}A`, `${r}B`); });
+    } else if (mode === 'flight') {
+      [1,2,3,4,5,6].forEach(r => { ['A','B','C','D','E','F'].forEach(c => allSeats.push(`${r}${c}`)); });
+    } else {
+      ['A','B','C','D','E','F'].forEach(r => { [1,2,3,4,5,6,7,8].forEach(c => allSeats.push(`${r}${c}`)); });
+    }
+    allSeats.forEach(s => { map[s] = Math.random() > 0.7; });
+    return map;
   });
 
   const toggleSeat = (seat) => {
-    if (occupiedSeats.includes(seat)) return;
-    if (selected.includes(seat)) {
-      setSelected(selected.filter(s => s !== seat));
-    } else {
-      setSelected([...selected, seat]);
-    }
+    if (occupiedMap[seat]) return;
+    setSelected(prev => prev.includes(seat) ? prev.filter(s => s !== seat) : [...prev, seat]);
   };
 
-  return (
-    <div className="mt-3 bg-[#1e1e1e] p-4 rounded-xl border border-gray-700 shadow-xl w-full max-w-full">
-      <div className="text-center mb-4">
-        <div className="w-3/4 h-2 bg-gradient-to-r from-blue-500 to-purple-600 mx-auto rounded-full shadow-[0_0_15px_rgba(59,130,246,0.5)] mb-1"></div>
-        <p className="text-[10px] text-gray-400 uppercase tracking-widest">{config.label}</p>
+  const Seat = ({ id, label, className = "" }) => {
+    const isOccupied = occupiedMap[id];
+    const isSelected = selected.includes(id);
+    return (
+      <motion.button
+        whileHover={!isOccupied ? { scale: 1.1, zIndex: 10 } : {}}
+        whileTap={!isOccupied ? { scale: 0.9 } : {}}
+        onClick={() => toggleSeat(id)}
+        className={`relative flex items-center justify-center text-[8px] font-bold transition-all ${className} ${
+          isOccupied ? 'bg-zinc-800 text-white/20 cursor-not-allowed shadow-inner' :
+          isSelected ? 'bg-blue-500 text-white shadow-[0_0_12px_rgba(59,130,246,0.8)]' :
+          'bg-zinc-700 text-white/60 hover:bg-zinc-600'
+        }`}
+      >
+        {!isOccupied && (label || id)}
+      </motion.button>
+    );
+  };
+
+  const renderMovie = () => (
+    <div className="flex flex-col items-center">
+      <div className="relative w-full max-w-[250px] mb-8 perspective-1000">
+        <div className="w-full h-1 bg-blue-500 rounded-full blur-[2px] opacity-50" />
+        <div className="w-full h-6 bg-gradient-to-b from-blue-500/20 to-transparent rounded-t-[100%] border-t border-blue-400/30" />
+        <p className="text-[9px] text-center text-blue-300/60 tracking-[0.3em] font-bold mt-1 uppercase">SCREEN THIS WAY</p>
       </div>
-      
-      <div className="flex flex-col gap-2 mb-4 items-center">
-        {config.rows.map(row => (
-          <div key={row} className="flex gap-1 sm:gap-2">
-            {config.cols.map((col, idx) => {
-              if (col === 'GAP') {
-                return <div key={`gap-${row}-${idx}`} className="w-2 sm:w-4"></div>;
-              }
-              const seat = mode === 'flight' ? `${row}${col}` : `${row}${col}`; // Just combining row+col
-              const isSelected = selected.includes(seat);
-              const isOccupied = occupiedSeats.includes(seat);
-              return (
-                <button
-                  key={seat}
-                  onClick={() => toggleSeat(seat)}
-                  disabled={isOccupied}
-                  className={`w-6 h-6 sm:w-8 sm:h-8 rounded-t-lg rounded-b-sm text-[8px] sm:text-[10px] font-bold flex items-center justify-center transition-all duration-200 ${
-                    isOccupied 
-                      ? 'bg-[#111111] text-gray-600 cursor-not-allowed border border-gray-800'
-                      : isSelected 
-                      ? 'bg-blue-500 text-white shadow-[0_0_10px_rgba(59,130,246,0.6)] transform scale-110 border border-blue-400' 
-                      : 'bg-gray-800 text-gray-400 hover:bg-gray-600 hover:text-white border border-gray-700'
-                  }`}
-                >
-                  {isOccupied ? 'X' : seat}
-                </button>
-              );
-            })}
+      <div className="flex flex-col gap-2">
+        {['A','B','C','D','E','F'].map(row => (
+          <div key={row} className="flex gap-2 items-center">
+            <span className="text-[10px] font-bold text-zinc-500 w-3 text-right">{row}</span>
+            <div className="flex gap-1">
+              {[1,2,3,4].map(col => <Seat key={`${row}${col}`} id={`${row}${col}`} label={col} className="w-6 h-7 rounded-t-lg" />)}
+            </div>
+            <div className="w-6" /> {/* Aisle */}
+            <div className="flex gap-1">
+              {[5,6,7,8].map(col => <Seat key={`${row}${col}`} id={`${row}${col}`} label={col} className="w-6 h-7 rounded-t-lg" />)}
+            </div>
           </div>
         ))}
       </div>
-      
-      <div className="flex justify-between items-center mb-4 text-sm bg-black/30 p-2 rounded-lg">
-        <span className="text-gray-300">Selected: <span className="text-white font-bold">{selected.length}</span></span>
-        <span className="text-gray-300">Total: <span className="text-blue-400 font-bold">₹{selected.length * config.pricePerSeat}</span></span>
-      </div>
-
-      <button
-        onClick={() => onConfirm(selected, selected.length * config.pricePerSeat)}
-        disabled={selected.length === 0}
-        className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 disabled:opacity-50 disabled:cursor-not-allowed text-white py-2.5 rounded-lg text-sm font-semibold transition-all shadow-lg active:scale-95"
-      >
-        Confirm Seats
-      </button>
     </div>
+  );
+
+  const renderFlight = () => (
+    <div className="flex flex-col items-center w-full">
+      <div className="w-full max-w-[240px] bg-zinc-800/30 rounded-[3rem] p-6 border border-zinc-700/50 shadow-inner relative overflow-hidden">
+        <div className="text-center mb-6 border-b border-zinc-700/50 pb-2 relative z-10">
+          <p className="text-[10px] text-zinc-400 font-bold tracking-widest uppercase">COCKPIT</p>
+        </div>
+        <div className="flex flex-col gap-3 relative z-10">
+          {[1,2,3,4,5,6].map(row => (
+            <div key={row} className="flex gap-1 items-center justify-center">
+              <div className="flex gap-[2px]">
+                {['A','B','C'].map(col => <Seat key={`${row}${col}`} id={`${row}${col}`} label={col} className="w-5 h-7 rounded-sm" />)}
+              </div>
+              <span className="text-[9px] font-bold text-zinc-600 w-6 text-center">{row}</span>
+              <div className="flex gap-[2px]">
+                {['D','E','F'].map(col => <Seat key={`${row}${col}`} id={`${row}${col}`} label={col} className="w-5 h-7 rounded-sm" />)}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderBus = () => (
+    <div className="flex flex-col items-center w-full">
+      <div className="w-full max-w-[220px] border-2 border-zinc-700/50 rounded-3xl p-5 bg-zinc-900/50 shadow-inner">
+        <div className="flex justify-end mb-6 border-b border-zinc-800 pb-3">
+          <div className="relative w-6 h-6 rounded-full border-2 border-zinc-600 flex items-center justify-center overflow-hidden">
+             <div className="w-[2px] h-full bg-zinc-600 rotate-45" />
+             <div className="w-full h-[2px] bg-zinc-600 absolute rotate-45" />
+          </div>
+        </div>
+        <div className="flex flex-col gap-4">
+          <div className="flex justify-between items-center px-1 mb-1">
+             <span className="text-[8px] text-zinc-500 uppercase tracking-widest">SLEEPER</span>
+             <span className="text-[8px] text-zinc-500 uppercase tracking-widest">SEATER</span>
+          </div>
+          {[1,2,3,4,5].map(row => (
+            <div key={row} className="flex justify-between items-center">
+              <Seat id={`${row}W`} label={`${row}W`} className="w-9 h-12 rounded-sm border-l-4 border-l-blue-900" />
+              <div className="w-6 border-x border-dashed border-white/5 flex items-center justify-center">
+                 {row === 3 && <span className="text-[8px] text-zinc-700 rotate-90">AISLE</span>}
+              </div>
+              <div className="flex gap-1">
+                <Seat id={`${row}A`} label={`${row}A`} className="w-7 h-7 rounded-md" />
+                <Seat id={`${row}B`} label={`${row}B`} className="w-7 h-7 rounded-md" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderTrain = () => (
+    <div className="flex flex-col gap-5 items-center w-full">
+      {[1, 2].map(comp => (
+        <div key={comp} className="w-full max-w-[280px] border border-blue-900/30 bg-blue-950/20 rounded-xl p-3 relative shadow-inner">
+          <div className="absolute -left-3 top-1/2 -translate-y-1/2 w-3 h-8 bg-zinc-800 rounded-r-md border-y border-r border-zinc-700" />
+          <div className="flex justify-between items-center mb-3">
+            <span className="text-[8px] text-blue-400 font-bold tracking-widest">COMPARTMENT {comp}</span>
+            <span className="text-[8px] text-zinc-500">AC 3-TIER</span>
+          </div>
+          <div className="flex justify-between">
+            {/* Main Berths */}
+            <div className="flex flex-col gap-5">
+               <div className="flex gap-1 border-l-2 border-l-blue-900 pl-1">
+                 <Seat id={`${comp}A-U`} label="U" className="w-9 h-6 rounded-sm bg-blue-900/40 border border-blue-800/30" />
+                 <Seat id={`${comp}A-M`} label="M" className="w-9 h-6 rounded-sm bg-blue-800/40 border border-blue-700/30" />
+                 <Seat id={`${comp}A-L`} label="L" className="w-9 h-6 rounded-sm bg-blue-700/40 border border-blue-600/30" />
+               </div>
+               <div className="flex gap-1 border-l-2 border-l-blue-900 pl-1">
+                 <Seat id={`${comp}B-U`} label="U" className="w-9 h-6 rounded-sm bg-blue-900/40 border border-blue-800/30" />
+                 <Seat id={`${comp}B-M`} label="M" className="w-9 h-6 rounded-sm bg-blue-800/40 border border-blue-700/30" />
+                 <Seat id={`${comp}B-L`} label="L" className="w-9 h-6 rounded-sm bg-blue-700/40 border border-blue-600/30" />
+               </div>
+            </div>
+            {/* Aisle */}
+            <div className="flex-1 border-x border-dashed border-white/5 mx-2 flex items-center justify-center">
+              <span className="text-[8px] text-zinc-600 rotate-90 tracking-widest">WALKWAY</span>
+            </div>
+            {/* Side Berths */}
+            <div className="flex flex-col gap-4 justify-center border-r-2 border-r-purple-900 pr-1">
+                 <Seat id={`${comp}-SU`} label="SU" className="w-10 h-6 rounded-sm bg-purple-900/40 border border-purple-800/30" />
+                 <Seat id={`${comp}-SL`} label="SL" className="w-10 h-6 rounded-sm bg-purple-700/40 border border-purple-600/30" />
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      className="mt-4 bg-[#0a0a0a] p-6 rounded-[2rem] border border-white/10 shadow-2xl overflow-hidden max-w-sm w-full"
+    >
+      {mode === 'train' && renderTrain()}
+      {mode === 'bus' && renderBus()}
+      {mode === 'flight' && renderFlight()}
+      {(mode === 'movie' || mode === 'event') && renderMovie()}
+
+      <div className="mt-6 pt-4 border-t border-white/10 flex items-center justify-between">
+        <div>
+          <p className="text-[10px] text-gray-500 uppercase font-black tracking-widest">Subtotal</p>
+          <p className="text-xl font-black text-white tracking-tighter">INR {selected.length * config.price}</p>
+          <p className="text-[9px] text-gray-500">{selected.length} seat(s) selected</p>
+        </div>
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={() => onConfirm(selected, selected.length * config.price)}
+          disabled={selected.length === 0}
+          className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-30 disabled:from-zinc-800 disabled:to-zinc-800 px-6 py-3 rounded-xl font-black text-sm uppercase tracking-widest flex items-center gap-2 shadow-lg shadow-blue-600/20"
+        >
+          Confirm <CheckCircle2 size={16} />
+        </motion.button>
+      </div>
+    </motion.div>
   );
 };
 
-export const SummaryWidget = ({ details, onContinue }) => {
+export const CollabXPaymentWidget = ({
+  session,
+  booking,
+  details,
+  onSuccess,
+}) => {
+  const [qrUrl, setQrUrl] = useState("");
+  const [status, setStatus] = useState(session?.status || "pending");
+  const completedRef = useRef(false);
+
+  const notifySuccess = (payload) => {
+    if (completedRef.current) return;
+    completedRef.current = true;
+    onSuccess?.(payload);
+  };
+
+  useEffect(() => {
+    if (!session?.confirmationUrl) return;
+
+    QRCode.toDataURL(session.confirmationUrl, {
+      errorCorrectionLevel: "M",
+      margin: 2,
+      color: {
+        dark: "#111827",
+        light: "#ffffff",
+      },
+      width: 260,
+    })
+      .then(setQrUrl)
+      .catch(console.error);
+  }, [session?.confirmationUrl]);
+
+  useEffect(() => {
+    if (!session?.token || status === "paid") return;
+
+    const timer = window.setInterval(async () => {
+      try {
+        const response = await API.get(
+          `/payments/collabx-session/${session.token}`
+        );
+        const nextSession = response.data.session;
+
+        setStatus(nextSession.status);
+
+        if (nextSession.status === "paid") {
+          window.clearInterval(timer);
+          notifySuccess({
+            orderId: nextSession.id,
+            paymentId: nextSession.razorpayPaymentId,
+            method: nextSession.paymentMethod || "upi",
+            session: nextSession,
+          });
+        }
+      } catch (error) {
+        console.log("Payment status polling skipped", error);
+      }
+    }, 2200);
+
+    return () => window.clearInterval(timer);
+  }, [onSuccess, session?.token, status]);
+
   return (
-    <div className="mt-2 bg-[#2a2a2a] p-4 rounded-xl border border-gray-700">
-      <h3 className="font-semibold text-white mb-3">Booking Summary</h3>
-      <div className="space-y-2 mb-4">
-        {details.map((detail, idx) => (
-          <div key={idx} className="text-sm text-gray-300 flex justify-between">
-            <span>{detail}</span>
+    <motion.div
+      initial={{ opacity: 0, y: 16, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      className="mt-4 w-full max-w-md overflow-hidden rounded-3xl border border-white/10 bg-zinc-950 shadow-2xl"
+    >
+      <div className="relative overflow-hidden bg-gradient-to-br from-sky-600 via-blue-700 to-violet-700 p-5">
+        <motion.div
+          animate={{ x: ["-20%", "110%"] }}
+          transition={{ duration: 2.6, repeat: Infinity, ease: "linear" }}
+          className="absolute inset-y-0 w-24 rotate-12 bg-white/10 blur-xl"
+        />
+        <div className="relative flex items-start justify-between gap-4">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.28em] text-sky-100">
+              CollabX Payments
+            </p>
+            <h3 className="mt-2 text-2xl font-black text-white">
+              Scan QR To Pay
+            </h3>
+            <p className="mt-1 text-sm text-sky-100/80">
+              Confirm payment from the scanned page. This chat updates automatically.
+            </p>
           </div>
-        ))}
+          <div className="rounded-2xl border border-white/20 bg-white/10 p-3">
+            <ShieldCheck size={28} />
+          </div>
+        </div>
       </div>
-      <button
-        onClick={onContinue}
-        className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg text-sm font-medium transition-colors"
-      >
-        Continue to Payment
-      </button>
-    </div>
+
+      <div className="space-y-5 p-5">
+        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-widest text-gray-500">
+                Payable Amount
+              </p>
+              <p className="mt-1 text-3xl font-black text-white">
+                INR {session?.amount || 0}
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-[10px] font-black uppercase tracking-widest text-gray-500">
+                Order
+              </p>
+              <p className="mt-1 max-w-[150px] truncate font-mono text-xs text-gray-300">
+                {session?.orderId || session?.id}
+              </p>
+            </div>
+          </div>
+          <p className="mt-3 text-xs text-gray-500">
+            {booking?.confirmationCode
+              ? `Booking ${booking.confirmationCode}`
+              : "Booking locked until payment confirmation"}
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-sky-400/20 bg-sky-500/10 p-4">
+          <div className="flex items-center gap-3 text-sky-100">
+            <QrCode size={20} />
+            <div>
+              <p className="text-sm font-black uppercase tracking-widest">
+                QR payment only
+              </p>
+              <p className="mt-1 text-xs text-sky-100/70">
+                Scan the QR, complete payment on that page, and keep this chat open.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-3xl border border-white/10 bg-white p-4 text-black">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-black uppercase tracking-widest text-gray-500">
+                Scan To Pay
+              </p>
+              <p className="text-sm font-bold text-gray-900">
+                Open the confirmation link on your phone
+              </p>
+            </div>
+            <Smartphone className="text-blue-600" size={24} />
+          </div>
+
+          <div className="mt-4 flex justify-center">
+            {qrUrl ? (
+              <img
+                src={qrUrl}
+                alt="CollabX payment confirmation QR"
+                className="h-48 w-48 rounded-2xl"
+              />
+            ) : (
+              <div className="flex h-48 w-48 items-center justify-center rounded-2xl bg-gray-100">
+                <Loader2 className="animate-spin text-blue-600" />
+              </div>
+            )}
+          </div>
+
+          <p className="mt-3 break-all text-center text-[10px] text-gray-500">
+            {session?.confirmationUrl}
+          </p>
+
+          {session?.confirmationUrl && (
+            <a
+              href={session.confirmationUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-3 block rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-center text-xs font-black uppercase tracking-widest text-blue-700"
+            >
+              Open payment link
+            </a>
+          )}
+        </div>
+
+        <div className="rounded-2xl border border-blue-500/20 bg-blue-500/10 p-3">
+          <div className="flex items-center gap-2 text-blue-200">
+            {status === "paid" ? (
+              <CheckCircle2 size={18} />
+            ) : (
+              <Loader2 size={18} className="animate-spin" />
+            )}
+            <span className="text-sm font-bold">
+              {status === "paid"
+                ? "Payment confirmed"
+                : "Waiting for QR payment confirmation"}
+            </span>
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  );
+};
+
+// --- SUMMARY: THE "GLASS TICKET" ---
+export const SummaryWidget = ({
+  details = [],
+  userName = "Guest Passenger",
+  onContinue,
+  paid = false,
+  payment = null,
+  paymentLoading = false,
+}) => {
+  const [ticketId] = useState(() => `CX-${Math.random().toString(36).substr(2, 6).toUpperCase()}`);
+  const bookingTime = new Date().toLocaleString();
+
+  // Fake Realistic Metadata
+  const [pnr] = useState(() => Math.random().toString(36).substr(2, 6).toUpperCase());
+  const [ticketClass] = useState(() => ['PREMIUM', 'ECONOMY', 'VIP', 'STANDARD'][Math.floor(Math.random() * 4)]);
+  const [gate] = useState(() => `G-${Math.floor(Math.random() * 30) + 1}`);
+  const [status] = useState('CONFIRMED');
+  const [uiQrUrl, setUiQrUrl] = useState("");
+
+  useEffect(() => {
+    const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5173';
+    QRCode.toDataURL(`${baseUrl}/verify/${ticketId}`, { 
+      errorCorrectionLevel: 'M', 
+      margin: 1,
+      color: { dark: '#ffffff', light: '#00000000' }
+    }).then(setUiQrUrl).catch(console.error);
+  }, [ticketId]);
+
+  const legacyDownload = async () => {
+    const doc = new jsPDF();
+    
+    // Watermark
+    doc.setTextColor(240, 240, 240);
+    doc.setFontSize(50);
+    doc.text(paid ? "Official E-Ticket" : "Draft / Unpaid", 105, 150, { align: 'center', angle: 45 });
+    
+    // Ticket Border
+    doc.setDrawColor(50, 50, 50);
+    doc.setLineWidth(1);
+    doc.roundedRect(15, 20, 180, 160, 5, 5);
+    
+    // Header
+    doc.setFillColor(30, 58, 138); // blue-900
+    doc.rect(15, 20, 180, 25, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(20);
+    doc.setFont("helvetica", "bold");
+    doc.text(paid ? "OFFICIAL COLLABX E-TICKET" : "BOOKING INVOICE & SUMMARY", 105, 38, { align: 'center' });
+    
+    // Grid Row 1
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(100, 100, 100);
+    doc.text("PASSENGER NAME", 25, 60);
+    doc.text("PNR / REF", 150, 60);
+    
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(0, 0, 0);
+    doc.text(userName, 25, 68);
+    doc.text(pnr, 150, 68);
+    
+    doc.setDrawColor(200, 200, 200);
+    doc.setLineWidth(0.5);
+    doc.line(20, 75, 190, 75);
+
+    // Grid Row 2
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(100, 100, 100);
+    doc.text("CLASS", 25, 85);
+    doc.text("GATE/ZONE", 85, 85);
+    doc.text("STATUS", 150, 85);
+
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    doc.text(ticketClass, 25, 93);
+    doc.text(gate, 85, 93);
+    doc.setTextColor(34, 197, 94); // Green
+    doc.text(paid ? "PAID" : status, 150, 93);
+    
+    doc.line(20, 100, 190, 100);
+    
+    // Details Section
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(100, 100, 100);
+    doc.text("BOOKING DETAILS", 25, 110);
+    
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(0, 0, 0);
+    
+    let y = 120;
+    details.forEach(detail => {
+      // Fix Rupee symbol causing garbage encoding in PDF
+      const safeDetail = detail.replace(/₹/g, 'INR ');
+      doc.text(safeDetail, 25, y);
+      y += 10;
+    });
+
+    if (paid && payment?.paymentId) {
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(80, 80, 80);
+      doc.text(`PAYMENT ID: ${payment.paymentId}`, 25, y + 4);
+      doc.text(`ORDER ID: ${payment.orderId || "N/A"}`, 25, y + 12);
+    }
+    
+    // Cutout line
+    doc.setDrawColor(200, 200, 200);
+    doc.setLineWidth(0.5);
+    doc.line(15, 155, 195, 155); 
+    
+    // Real QR Code replacing fake barcode
+    try {
+      const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5173';
+      const verificationUrl = `${baseUrl}/verify/${ticketId}`;
+      const qrDataUrl = await QRCode.toDataURL(verificationUrl, { errorCorrectionLevel: 'M', margin: 0 });
+      
+      doc.addImage(qrDataUrl, 'PNG', 25, 160, 15, 15);
+      
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(100, 100, 100);
+      doc.text("SCAN TO VERIFY ENTIRE TICKET & CHAT CONTEXT", 45, 166);
+      doc.text(verificationUrl, 45, 171);
+    } catch (err) {
+      console.error("Failed to generate QR code", err);
+    }
+    
+    // Footer / Metadata
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(150, 150, 150);
+    doc.text(`TICKET ID: ${ticketId}  |  ISSUED: ${bookingTime}`, 105, 190, { align: 'center' });
+    
+    doc.save(`CollabX_${paid ? "Official_E_Ticket" : "Ticket_Draft"}_${ticketId}.pdf`);
+  };
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0, rotateY: -20 }}
+      animate={{ opacity: 1, rotateY: 0 }}
+      className="mt-4 relative group w-full max-w-sm"
+    >
+      <div className="absolute inset-0 bg-gradient-to-br from-blue-600 to-purple-600 blur-2xl opacity-10 group-hover:opacity-20 transition-opacity" />
+      
+      <div className="relative bg-zinc-950/95 backdrop-blur-2xl border border-white/10 rounded-3xl overflow-hidden shadow-2xl">
+        <div className="relative overflow-hidden bg-gradient-to-br from-blue-600 via-indigo-700 to-violet-800 p-6 border-b border-white/10">
+          <motion.div
+            animate={{ x: ["-30%", "130%"] }}
+            transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
+            className="absolute inset-y-0 w-20 rotate-12 bg-white/10 blur-2xl"
+          />
+          <div className="flex justify-between items-start">
+            <div>
+              <h3 className="text-2xl font-black tracking-tight text-white">COLLABX PASS</h3>
+              <p className="text-[10px] text-blue-100 font-bold tracking-widest uppercase">
+                {paid ? "Official CollabX E-Ticket" : "Payment pending"}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-white/20 bg-white/10 p-3">
+              <Ticket className="text-white" size={28} />
+            </div>
+          </div>
+        </div>
+
+        <div className="p-6 space-y-4">
+          <div className="flex justify-between items-center border-b border-white/10 pb-3">
+            <span className="text-[10px] text-gray-500 uppercase font-black tracking-widest">Passenger</span>
+            <span className="text-lg text-gray-200 font-bold">{userName}</span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4 pb-3 border-b border-white/10">
+            <div>
+              <span className="text-[9px] text-gray-500 uppercase font-black tracking-widest">PNR / Ref</span>
+              <p className="text-lg text-white font-mono font-bold">{pnr}</p>
+            </div>
+            <div className="text-right">
+              <span className="text-[9px] text-gray-500 uppercase font-black tracking-widest">Status</span>
+              <p className={`inline-flex rounded-full px-3 py-1 text-xs font-black tracking-widest ${
+                paid
+                  ? "bg-emerald-500/10 text-emerald-300 border border-emerald-500/20"
+                  : "bg-amber-500/10 text-amber-300 border border-amber-500/20"
+              }`}>
+                {paid ? "PAID" : "READY"}
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2 pb-3 border-b border-white/10">
+            <div>
+              <span className="text-[9px] text-gray-500 uppercase font-black tracking-widest">Class</span>
+              <p className="text-sm text-gray-200 font-semibold">{ticketClass}</p>
+            </div>
+            <div>
+              <span className="text-[9px] text-gray-500 uppercase font-black tracking-widest">Gate/Zone</span>
+              <p className="text-sm text-gray-200 font-semibold">{gate}</p>
+            </div>
+            <div className="text-right">
+              <span className="text-[9px] text-gray-500 uppercase font-black tracking-widest">Time</span>
+              <p className="text-xs text-gray-400 font-medium">{bookingTime.split(',')[1]}</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-2 pt-2">
+            {details.map((detail, idx) => {
+              const parts = detail.split(':');
+              return (
+                <div key={idx} className="flex flex-col">
+                  {parts.length > 1 ? (
+                    <>
+                      <span className="text-[9px] text-gray-500 uppercase font-black tracking-widest">{parts[0].trim()}</span>
+                      <span className="text-sm text-gray-200 font-semibold">{parts.slice(1).join(':').trim()}</span>
+                    </>
+                  ) : (
+                    <span className="text-[11px] text-gray-200 font-semibold">{detail}</span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {paid && payment?.paymentId && (
+            <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-3">
+              <span className="text-[9px] text-emerald-300 uppercase font-black tracking-widest">Verified Payment</span>
+              <p className="text-xs text-emerald-100 font-mono mt-1 break-all">
+                {payment.paymentId}
+              </p>
+            </div>
+          )}
+
+          {/* Holographic QR Code */}
+          <div className="relative mt-6 py-4 bg-white rounded-2xl border border-white/10 overflow-hidden flex flex-col items-center text-black">
+             {uiQrUrl ? (
+               <img src={uiQrUrl} alt="Ticket QR" className="w-28 h-28" />
+             ) : (
+               <div className="w-28 h-28 bg-gray-100 rounded-lg animate-pulse" />
+             )}
+             {/* Animated Scanner Line */}
+             <motion.div 
+               animate={{ top: ['0%', '100%', '0%'] }}
+               transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
+               className="absolute left-0 right-0 h-[2px] bg-blue-500/70 shadow-[0_0_15px_#3b82f6] z-10" 
+             />
+             <p className="text-center text-[9px] font-mono mt-4 text-gray-500">SCAN TO VERIFY: {ticketId}</p>
+          </div>
+        </div>
+
+        <div className="p-4 bg-white/5 flex gap-3">
+          <button onClick={legacyDownload} className="p-3 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 text-white transition-all">
+            <Download size={20} />
+          </button>
+          {!paid && (
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={onContinue}
+              disabled={paymentLoading}
+              className="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-50 text-white py-4 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl flex items-center justify-center gap-3"
+            >
+              {paymentLoading ? "Opening..." : "Continue With Payment"} <CreditCard size={18} />
+            </motion.button>
+          )}
+          {paid && (
+            <div className="flex-1 bg-emerald-500/10 border border-emerald-500/20 text-emerald-200 py-4 rounded-2xl font-black text-sm uppercase tracking-widest flex items-center justify-center gap-3">
+              Paid <CheckCircle2 size={18} />
+            </div>
+          )}
+        </div>
+      </div>
+    </motion.div>
   );
 };
