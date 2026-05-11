@@ -110,7 +110,7 @@ const Dashboard = () => {
 
     const socket = io(
       import.meta.env.VITE_API_ORIGIN ||
-        "http://localhost:5000",
+        "https://collabx-ipp2.onrender.com",
       {
         auth: {
           userId: user.uid,

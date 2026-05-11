@@ -112,7 +112,7 @@ const buildTitle = (message) =>
     : message || "New support chat";
 
 const apiBaseUrl =
-  import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+  import.meta.env.VITE_API_URL || "https://collabx-ipp2.onrender.com/api";
 
 const AIChat = () => {
   const { user } = useContext(AuthContext);
