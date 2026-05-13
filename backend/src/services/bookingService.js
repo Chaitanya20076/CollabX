@@ -17,6 +17,9 @@ const REFUND_WINDOW_MS = 24 * 60 * 60 * 1000;
 const createRefundToken = () =>
   crypto.randomBytes(24).toString("hex");
 
+const createTrackingCode = (prefix, id = "") =>
+  `${prefix}-${id.slice(0, 8).toUpperCase()}`;
+
 const bookingCatalog = {
   movie: {
     label: "Movie",
@@ -230,6 +233,7 @@ export const createBooking = async (payload = {}) => {
   const confirmationCode = `CXB-${docRef.id
     .slice(0, 6)
     .toUpperCase()}`;
+  const trackingCode = createTrackingCode("CX-BOOK", docRef.id);
 
   const booking = {
     userId: payload.userId || "anonymous",
@@ -245,6 +249,7 @@ export const createBooking = async (payload = {}) => {
     selectedSeats,
     status: "confirmed",
     confirmationCode,
+    trackingCode,
     availability,
     pricing,
     recommendation:
@@ -271,6 +276,7 @@ export const createBooking = async (payload = {}) => {
     metadata: {
       bookingId: serialized.id,
       confirmationCode: booking.confirmationCode,
+      trackingCode: booking.trackingCode,
       type: booking.type,
     },
   });
@@ -279,11 +285,36 @@ export const createBooking = async (payload = {}) => {
     await sendEmailNotification({
       to: booking.userEmail,
       subject: "CollabX booking confirmed",
-      text: `Your booking is confirmed. Confirmation code: ${booking.confirmationCode}`,
+      text: `Your booking is confirmed. Tracking code: ${booking.trackingCode}`,
     });
   }
 
   return serialized;
+};
+
+export const getBookingByTrackingCode = async (code = "") => {
+  const normalized = String(code || "").trim().toUpperCase();
+  if (!normalized) return null;
+
+  const trackingSnapshot = await bookings
+    .where("trackingCode", "==", normalized)
+    .limit(1)
+    .get();
+
+  if (!trackingSnapshot.empty) {
+    return serializeBooking(trackingSnapshot.docs[0]);
+  }
+
+  const confirmationSnapshot = await bookings
+    .where("confirmationCode", "==", normalized)
+    .limit(1)
+    .get();
+
+  if (!confirmationSnapshot.empty) {
+    return serializeBooking(confirmationSnapshot.docs[0]);
+  }
+
+  return null;
 };
 
 export const getUserBookings = async (userId) => {

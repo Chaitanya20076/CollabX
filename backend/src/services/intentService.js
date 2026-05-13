@@ -113,17 +113,110 @@ export const detectIntent = (message = "") => {
   };
 };
 
+const sanitizeTicketText = (value = "") =>
+  String(value || "")
+    .replace(/\[ACTION:[^\]]+\]/gi, "")
+    .replace(/https?:\/\/\S+/gi, "")
+    .replace(/[`*_#>]+/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const toSentenceCase = (value = "") => {
+  const cleaned = sanitizeTicketText(value)
+    .replace(/\b(please\s*)?(create|raise|log|submit|open)\s+(a\s+)?(support\s+)?ticket\s*(please)?\b/ig, "")
+    .replace(/\b(convert this into|make this|draft this as)\s+(a\s+)?(support\s+)?ticket\b/ig, "")
+    .replace(/\b(ticket\s*)?(please|pls)\b$/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!cleaned) return "";
+
+  return `${cleaned.charAt(0).toUpperCase()}${cleaned.slice(1)}`;
+};
+
+const inferTicketCategory = (message = "", intent = {}) => {
+  const lower = message.toLowerCase();
+
+  if (/\b(laptop|desktop|computer|phone|mobile|tablet|charger|screen|keyboard|battery|hardware|device|warranty|repair|service center|lenovo|hp|dell|asus|acer|apple|samsung|sony|oneplus|xiaomi)\b/.test(lower)) {
+    return "product_support";
+  }
+
+  if (intent.intent === "refund" || /\b(refund|money back|chargeback|reversal)\b/.test(lower)) {
+    return "refund";
+  }
+
+  if (intent.intent === "payment" || /\b(payment|paid|failed|transaction|invoice|razorpay|money debited)\b/.test(lower)) {
+    return "payment";
+  }
+
+  if (/\b(book|booking|movie|flight|hotel|train|bus|event|concert)\b/.test(lower)) {
+    return "booking";
+  }
+
+  if (/\b(login|password|otp|email|account|verify|verification|access)\b/.test(lower)) {
+    return "account";
+  }
+
+  if (/\b(error|bug|crash|failed|not working|unable|issue|problem|technical)\b/.test(lower)) {
+    return "technical";
+  }
+
+  if (intent.intent === "complaint" || /\b(complaint|angry|bad service|not satisfied)\b/.test(lower)) {
+    return "complaint";
+  }
+
+  return "general_support";
+};
+
+const buildTicketTitle = (message = "", intent = {}) => {
+  const category = inferTicketCategory(message, intent);
+  const titles = {
+    refund: "Refund assistance request",
+    payment: "Payment support request",
+    booking: "Booking support request",
+    account: "Account access support request",
+    technical: "Technical issue support request",
+    product_support: "Product support ticket request",
+    complaint: "Customer complaint review",
+    general_support: "General support request",
+  };
+
+  return titles[category] || "Support request";
+};
+
+const buildTicketSummary = (message = "", intent = {}) => {
+  const affectedService = message.match(/^Affected service:\s*(.+)$/im)?.[1]?.trim();
+  const ticketTarget = message.match(/^Ticket target:\s*(.+)$/im)?.[1]?.trim();
+  const issueText = String(message || "")
+    .replace(/^Affected service:\s*.+$/gim, "")
+    .replace(/^Ticket target:\s*.+$/gim, "")
+    .replace(/^Priority:\s*.+$/gim, "")
+    .trim();
+  const issue = toSentenceCase(issueText) || "Customer requested help raising a support ticket.";
+  const priority = intent.priority || "normal";
+  const lines = [`Issue: ${issue}`];
+
+  if (ticketTarget) {
+    lines.push(`Ticket target: ${sanitizeTicketText(ticketTarget)}`);
+  }
+
+  if (affectedService) {
+    lines.push(`Affected service: ${sanitizeTicketText(affectedService)}`);
+  }
+
+  lines.push(`Priority: ${priority}`);
+  lines.push("Requested action: Prepare this as a support ticket for the target provider.");
+
+  return lines.join("\n");
+};
+
 export const buildTicketDraft = (message = "", intent = {}) => {
-  const summary =
-    message.length > 140
-      ? `${message.slice(0, 137)}...`
-      : message;
+  const category = inferTicketCategory(message, intent);
 
   return {
-    title: intent.label || "Support request",
-    category: intent.intent || "general_support",
+    title: buildTicketTitle(message, intent),
+    category,
     priority: intent.priority || "normal",
-    summary,
+    summary: buildTicketSummary(message, intent),
     status: "draft",
     nextFields: [
       "name or contact detail",

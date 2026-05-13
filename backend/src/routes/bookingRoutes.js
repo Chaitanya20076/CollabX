@@ -10,6 +10,7 @@ import {
   listUserBookings,
   requestCancellationEmail,
   requestBookingRefund,
+  trackBookingByCode,
 } from "../controllers/bookingController.js";
 
 const router = express.Router();
@@ -17,6 +18,7 @@ const router = express.Router();
 router.get("/", listUserBookings);
 router.post("/", createUserBooking);
 router.get("/recommendations", listBookingRecommendations);
+router.get("/track/:code", trackBookingByCode);
 router.get("/cancellation/:token", getCancellationRequest);
 router.post("/cancellation/:token/confirm", confirmCancellationRequest);
 router.get("/:id", getUserBooking);

@@ -31,6 +31,12 @@ import toast from "react-hot-toast";
 
 import { AuthContext } from "../../context/AuthContext";
 import API from "../../services/api";
+import {
+  buildClientContext,
+  getStoredLocation,
+  needsLocationForTicketing,
+  requestBrowserLocation,
+} from "../../utils/location";
 import { storage } from "../../config/firebase";
 import {
   CollabXPaymentWidget,
@@ -112,7 +118,7 @@ const buildTitle = (message) =>
     : message || "New support chat";
 
 const apiBaseUrl =
-  import.meta.env.VITE_API_URL || "https://collabx-9sf9.onrender.com/api";
+  import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 const AIChat = () => {
   const { user } = useContext(AuthContext);
@@ -129,6 +135,7 @@ const AIChat = () => {
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [listening, setListening] = useState(false);
   const [showTools, setShowTools] = useState(true);
+  const [userLocation, setUserLocation] = useState(getStoredLocation);
 
   const fileInputRef = useRef(null);
   const imageInputRef = useRef(null);
@@ -168,6 +175,14 @@ const AIChat = () => {
       JSON.stringify(sessions)
     );
   }, [sessions]);
+
+  useEffect(() => {
+    if (userLocation) return;
+
+    requestBrowserLocation().then((location) => {
+      if (location) setUserLocation(location);
+    });
+  }, [userLocation]);
 
   useEffect(() => {
     const loadFirestoreSessions = async () => {
@@ -350,10 +365,15 @@ const AIChat = () => {
         attachments: latestUserAttachments,
       });
 
-      toast.success(`Ticket created: ${response.data.ticket.id}`);
+      const createdTicket = response.data.ticket;
+      toast.success(
+        `Ticket created: ${createdTicket.trackingCode || createdTicket.id}`
+      );
+      return createdTicket;
     } catch (error) {
       console.log(error);
       toast.error("Ticket creation failed");
+      return null;
     }
   };
 
@@ -463,6 +483,7 @@ const AIChat = () => {
           `Seats: ${bookingDraft?.seats?.join(", ") || "Selected seats"}`,
           `Amount Paid: INR ${bookingDraft?.price || booking.pricing?.total || 0}`,
           `Booking ID: ${booking.id}`,
+          `Tracking Code: ${booking.trackingCode || booking.confirmationCode}`,
           `Confirmation: ${booking.confirmationCode}`,
           `Payment Mode: CollabX ${method.toUpperCase()}`,
         ],
@@ -534,6 +555,21 @@ const AIChat = () => {
 
     if (!currentMessage || loading) return;
 
+    let activeLocation = userLocation || getStoredLocation();
+
+    if (!activeLocation && needsLocationForTicketing(currentMessage)) {
+      activeLocation = await requestBrowserLocation();
+      if (activeLocation) {
+        setUserLocation(activeLocation);
+      } else {
+        toast.error("Location access is required for nearby ticket searches");
+        appendAssistantMessage(
+          "Please allow location access so I can search nearby theatres, hotels, events, or concerts accurately."
+        );
+        return;
+      }
+    }
+
     setLoading(true);
 
     let uploadedAttachments = [];
@@ -595,6 +631,7 @@ const AIChat = () => {
         body: JSON.stringify({
           message: currentMessage,
           attachments: uploadedAttachments,
+          clientContext: buildClientContext(activeLocation),
           history: messages
             .filter(
               (item, index) =>
@@ -717,6 +754,7 @@ const AIChat = () => {
         const response = await API.post("/chat", {
         message: currentMessage,
         attachments: uploadedAttachments,
+        clientContext: buildClientContext(activeLocation),
         history: messages
           .filter(
             (item, index) =>
@@ -972,11 +1010,14 @@ const AIChat = () => {
                     <MCQWidget
                       options={message.widget.options}
                       onSelect={(opt) => handleSend(`I select ${opt}`)}
+                      onBack={() => handleSend("Back")}
                     />
                   )}
                   {message.widget && message.widget.type === "seat_selection" && (
                     <SeatSelectionWidget
                       mode={message.widget.mode}
+                      maxSeats={message.widget.maxSeats}
+                      onBack={() => handleSend("Back to options")}
                       onConfirm={(seats, price) => {
                         setBookingDraft({
                           mode: message.widget.mode,
@@ -1020,10 +1061,12 @@ const AIChat = () => {
                   {message.widget && message.widget.type === "ticket_draft" && (
                     <TicketDraftWidget
                       draft={message.widget.draft}
-                      onConfirm={() => {
-                        handleCreateTicket();
+                      onConfirm={async () => {
+                        const createdTicket = await handleCreateTicket();
+                        if (!createdTicket) return;
+
                         appendAssistantMessage(
-                          "Your ticket has been successfully submitted to the dashboard! Our support team will review it shortly."
+                          `Your ticket has been submitted to the dashboard. Tracking code: ${createdTicket.trackingCode || createdTicket.id}`
                         );
                       }}
                     />

@@ -3,6 +3,7 @@ import {
   confirmCancellationByToken,
   createBooking,
   getBookingById,
+  getBookingByTrackingCode,
   getCancellationByToken,
   getBookingRecommendations,
   getUserBookings,
@@ -84,6 +85,33 @@ export const getUserBooking =
       res.status(500).json({
         success: false,
         message: "Booking loading failed",
+      });
+    }
+  };
+
+export const trackBookingByCode =
+  async (req, res) => {
+    try {
+      const booking = await getBookingByTrackingCode(req.params.code);
+
+      if (!booking) {
+        return res.status(404).json({
+          success: false,
+          message: "Tracking code not found",
+        });
+      }
+
+      res.status(200).json({
+        success: true,
+        type: "booking",
+        record: booking,
+      });
+    } catch (error) {
+      console.log(error);
+
+      res.status(500).json({
+        success: false,
+        message: "Tracking lookup failed",
       });
     }
   };

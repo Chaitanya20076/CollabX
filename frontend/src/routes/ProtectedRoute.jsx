@@ -1,4 +1,8 @@
-import { useContext } from "react";
+import {
+  useContext,
+  useEffect,
+  useState,
+} from "react";
 
 import {
   Navigate,
@@ -12,8 +16,26 @@ const ProtectedRoute = ({ children }) => {
   const { user, loading } =
     useContext(AuthContext);
   const location = useLocation();
+  const [graceLoading, setGraceLoading] = useState(false);
 
-  if (loading) return <Loader />;
+  useEffect(() => {
+    if (
+      !loading &&
+      !user &&
+      localStorage.getItem("collabx-auth-seen") === "true"
+    ) {
+      setGraceLoading(true);
+      const timer = window.setTimeout(() => {
+        setGraceLoading(false);
+      }, 1800);
+
+      return () => window.clearTimeout(timer);
+    }
+
+    setGraceLoading(false);
+  }, [loading, user]);
+
+  if (loading || graceLoading) return <Loader />;
 
   if (!user) {
     return (

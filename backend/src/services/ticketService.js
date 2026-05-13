@@ -7,6 +7,9 @@ import {
 
 const tickets = firestore.collection("tickets");
 
+const createTrackingCode = (id = "") =>
+  `CX-TKT-${id.slice(0, 8).toUpperCase()}`;
+
 const serializeTicket = (doc) => {
   const data = doc.data();
 
@@ -31,6 +34,38 @@ const SUPPORT_AGENTS = [
   { id: "agent-4", name: "Diana", specialty: "general_support" }
 ];
 
+const sanitizeTicketText = (value = "") =>
+  String(value || "")
+    .replace(/\[ACTION:[^\]]+\]/gi, "")
+    .replace(/https?:\/\/\S+/gi, "")
+    .replace(/[`*_#>]+/g, "")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+const normalizeTicketCategory = (category = "") => {
+  const normalized = String(category || "").toLowerCase().trim();
+
+  if ([
+    "booking",
+    "refund",
+    "technical",
+    "general_support",
+    "product_support",
+    "payment",
+    "account",
+    "complaint",
+  ].includes(normalized)) {
+    return normalized;
+  }
+
+  if (["support_ticket"].includes(normalized)) {
+    return "technical";
+  }
+
+  return "general_support";
+};
+
 const assignTicketToAgent = async (ticketCategory) => {
   const preferredAgents = SUPPORT_AGENTS.filter(a => a.specialty === ticketCategory);
   const agentsPool = preferredAgents.length > 0 ? preferredAgents : SUPPORT_AGENTS;
@@ -51,18 +86,20 @@ const assignTicketToAgent = async (ticketCategory) => {
 export const createTicket = async (payload = {}) => {
   const now = new Date();
   const docRef = tickets.doc();
-  const category = payload.category || "general_support";
+  const category = normalizeTicketCategory(payload.category);
+  const trackingCode = createTrackingCode(docRef.id);
   
   const assignedAgent = await assignTicketToAgent(category);
 
   const ticket = {
     userId: payload.userId || "anonymous",
     userEmail: payload.userEmail || "",
-    title: payload.title || "Support request",
+    title: sanitizeTicketText(payload.title) || "Support request",
     category,
-    summary: payload.summary || "",
+    summary: sanitizeTicketText(payload.summary),
     priority: payload.priority || "normal",
     status: "open",
+    trackingCode,
     source: payload.source || "ai_chat",
     attachments: Array.isArray(payload.attachments)
       ? payload.attachments.slice(0, 5)
@@ -84,6 +121,7 @@ export const createTicket = async (payload = {}) => {
     description: `Ticket assigned to agent ${assignedAgent.name}`,
     metadata: {
       ticketId: serialized.id,
+      trackingCode: ticket.trackingCode,
       priority: ticket.priority,
       agentId: assignedAgent.id,
       agentName: assignedAgent.name,
@@ -91,6 +129,26 @@ export const createTicket = async (payload = {}) => {
   });
 
   return serialized;
+};
+
+export const getTicketByTrackingCode = async (code = "") => {
+  const raw = String(code || "").trim();
+  const normalized = raw.toUpperCase();
+  if (!normalized) return null;
+
+  const trackingSnapshot = await tickets
+    .where("trackingCode", "==", normalized)
+    .limit(1)
+    .get();
+
+  if (!trackingSnapshot.empty) {
+    return serializeTicket(trackingSnapshot.docs[0]);
+  }
+
+  const doc = await tickets.doc(raw).get();
+  if (doc.exists) return serializeTicket(doc);
+
+  return null;
 };
 
 export const getUserTickets = async (userId) => {

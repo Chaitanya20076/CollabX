@@ -1,5 +1,9 @@
 import { useContext, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import {
+  Link,
+  useLocation,
+  useNavigate,
+} from "react-router-dom";
 import toast from "react-hot-toast";
 import { Mail, Lock, ArrowRight, ShieldCheck, Zap } from "lucide-react";
 import { FcGoogle } from "react-icons/fc";
@@ -8,6 +12,7 @@ import { AuthContext } from "../../context/AuthContext";
 
 const Login = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { login, googleLogin, resetPassword } = useContext(AuthContext);
 
   const [email, setEmail] = useState("");
@@ -21,7 +26,7 @@ const Login = () => {
       setLoading(true);
       await login(email, password);
       toast.success("Login successful");
-      navigate("/dashboard");
+      navigate(location.state?.from || "/dashboard", { replace: true });
     } catch (error) {
       toast.error(error.message);
     } finally {
@@ -33,7 +38,7 @@ const Login = () => {
     try {
       await googleLogin();
       toast.success("Google login successful");
-      navigate("/dashboard");
+      navigate(location.state?.from || "/dashboard", { replace: true });
     } catch (error) {
       toast.error(error.message);
     }

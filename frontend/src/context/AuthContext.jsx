@@ -30,6 +30,8 @@ import {
 
 export const AuthContext = createContext();
 
+const AUTH_SEEN_KEY = "collabx-auth-seen";
+
 const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
 
@@ -41,7 +43,8 @@ const AuthProvider = ({ children }) => {
     username,
     phone,
     email,
-    password
+    password,
+    location
   ) => {
     const userCredential =
       await createUserWithEmailAndPassword(
@@ -60,6 +63,7 @@ const AuthProvider = ({ children }) => {
       phone,
       email,
       verified: false,
+      location: location || null,
       createdAt: new Date(),
     });
 
@@ -86,7 +90,7 @@ const AuthProvider = ({ children }) => {
 
   // GOOGLE LOGIN
 
-  const googleLogin = async () => {
+  const googleLogin = async (location = null) => {
     await setPersistence(
       auth,
       browserLocalPersistence
@@ -107,6 +111,7 @@ const AuthProvider = ({ children }) => {
         email: userData.email,
         photo: userData.photoURL,
         verified: true,
+        location,
         createdAt: new Date(),
       },
       { merge: true }
@@ -118,6 +123,7 @@ const AuthProvider = ({ children }) => {
   // LOGOUT
 
   const logout = async () => {
+    localStorage.removeItem(AUTH_SEEN_KEY);
     return signOut(auth);
   };
 
@@ -152,18 +158,44 @@ const AuthProvider = ({ children }) => {
   // AUTH STATE
 
   useEffect(() => {
-    setPersistence(
-      auth,
-      browserLocalPersistence
-    );
+    let unsubscribe = () => {};
+    let active = true;
 
-    const unsubscribe =
-      onAuthStateChanged(auth, async (currentUser) => {
-        setUser(currentUser);
-        setLoading(false);
-      });
+    const initializeAuth = async () => {
+      try {
+        await setPersistence(
+          auth,
+          browserLocalPersistence
+        );
 
-    return () => unsubscribe();
+        if (typeof auth.authStateReady === "function") {
+          await auth.authStateReady();
+        }
+
+        if (!active) return;
+
+        unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+          if (currentUser) {
+            localStorage.setItem(AUTH_SEEN_KEY, "true");
+          }
+
+          if (!active) return;
+
+          setUser(currentUser);
+          setLoading(false);
+        });
+      } catch (error) {
+        console.log("Auth initialization failed", error);
+        if (active) setLoading(false);
+      }
+    };
+
+    initializeAuth();
+
+    return () => {
+      active = false;
+      unsubscribe();
+    };
   }, []);
 
   return (

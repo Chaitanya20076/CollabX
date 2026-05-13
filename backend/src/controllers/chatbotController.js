@@ -16,6 +16,7 @@ export const chatWithAI =
         message,
         history = [],
         attachments = [],
+        clientContext = {},
       } = req.body;
 
       if (
@@ -34,7 +35,8 @@ export const chatWithAI =
         await processAIChat(
           message,
           history,
-          attachments
+          attachments,
+          clientContext
         );
 
       res.status(200).json({
@@ -59,6 +61,7 @@ export const streamChatWithAI =
         message,
         history = [],
         attachments = [],
+        clientContext = {},
       } = req.body;
 
       if (
@@ -81,7 +84,8 @@ export const streamChatWithAI =
         await processAIChat(
           message,
           history,
-          attachments
+          attachments,
+          clientContext
         );
 
       const reply =

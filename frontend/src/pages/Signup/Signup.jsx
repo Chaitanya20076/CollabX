@@ -1,4 +1,8 @@
-import { useContext, useState } from "react";
+import {
+  useContext,
+  useEffect,
+  useState,
+} from "react";
 
 import { Link, useNavigate } from "react-router-dom";
 
@@ -10,11 +14,18 @@ import {
   Lock,
   Phone,
   ArrowRight,
+  LocateFixed,
 } from "lucide-react";
 
 import { FcGoogle } from "react-icons/fc";
 
 import { AuthContext } from "../../context/AuthContext";
+import {
+  clearStoredLocation,
+  getLocationPermissionState,
+  getStoredLocation,
+  requestBrowserLocation,
+} from "../../utils/location";
 
 const Signup = () => {
   const navigate = useNavigate();
@@ -35,6 +46,37 @@ const Signup = () => {
 
   const [loading, setLoading] =
     useState(false);
+  const [locationLoading, setLocationLoading] =
+    useState(false);
+  const [userLocation, setUserLocation] =
+    useState(null);
+  const [locationPermission, setLocationPermission] =
+    useState("prompt");
+
+  useEffect(() => {
+    let isMounted = true;
+
+    getLocationPermissionState().then((permission) => {
+      if (!isMounted) return;
+
+      setLocationPermission(permission);
+
+      if (permission === "granted") {
+        setUserLocation(getStoredLocation());
+      } else {
+        clearStoredLocation();
+        setUserLocation(null);
+      }
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const locationEnabled =
+    locationPermission === "granted" &&
+    Boolean(userLocation);
 
   const handleChange = (e) => {
     setFormData({
@@ -42,6 +84,27 @@ const Signup = () => {
       [e.target.name]:
         e.target.value,
     });
+  };
+
+  const ensureLocation = async () => {
+    if (locationEnabled) return userLocation;
+
+    setLocationLoading(true);
+    const location = await requestBrowserLocation();
+    const permission = await getLocationPermissionState();
+    setLocationPermission(permission);
+    setLocationLoading(false);
+
+    if (!location) {
+      clearStoredLocation();
+      setUserLocation(null);
+      toast.error("Location access is required to create a CollabX account");
+      return null;
+    }
+
+    setUserLocation(location);
+    toast.success("Location access enabled");
+    return location;
   };
 
   const handleSignup = async (e) => {
@@ -75,12 +138,15 @@ const Signup = () => {
 
     try {
       setLoading(true);
+      const location = await ensureLocation();
+      if (!location) return;
 
       await signup(
         username,
         phone,
         email,
-        password
+        password,
+        location
       );
 
       toast.success(
@@ -98,7 +164,10 @@ const Signup = () => {
   const handleGoogleSignup =
     async () => {
       try {
-        await googleLogin();
+        const location = await ensureLocation();
+        if (!location) return;
+
+        await googleLogin(location);
 
         toast.success(
           "Google signup successful"
@@ -126,6 +195,37 @@ const Signup = () => {
           <p className="text-gray-400 text-lg">
             Join the CollabX ecosystem
           </p>
+
+          <div className={`mt-6 rounded-2xl border p-4 text-left ${
+            locationEnabled
+              ? "border-emerald-500/30 bg-emerald-500/10"
+              : "border-red-500/30 bg-red-500/10"
+          }`}>
+            <div className="flex items-start gap-3">
+              <LocateFixed
+                size={20}
+                className={locationEnabled ? "text-emerald-300" : "text-red-300"}
+              />
+              <div>
+                <p className="font-semibold text-white">
+                  Location access is mandatory
+                </p>
+                <p className="mt-1 text-sm text-gray-400">
+                  CollabX needs it for nearby movie, hotel, event, and concert ticketing. Travel bookings still use your source and destination.
+                </p>
+                {userLocation?.label && (
+                  <p className="mt-2 text-sm text-emerald-200">
+                    Detected: {userLocation.label}
+                  </p>
+                )}
+                {locationPermission === "denied" && !userLocation && (
+                  <p className="mt-2 text-sm text-red-200">
+                    Browser location is blocked. Click the site/location icon near the address bar, allow location, then press Enable Location.
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
 
         </div>
 
@@ -280,7 +380,39 @@ const Signup = () => {
 
           </div>
 
-          <button className="primary-btn w-full flex items-center justify-center gap-3 py-4 text-lg">
+          <div className="rounded-2xl border border-blue-500/20 bg-blue-500/5 p-5">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <label className="block text-gray-200 font-semibold">
+                  Location Access
+                </label>
+                <p className="mt-1 text-sm text-gray-500">
+                  Required for nearby movie, hotel, event, and concert searches.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={ensureLocation}
+                disabled={locationLoading}
+                className="shrink-0 rounded-xl border border-blue-500/30 bg-blue-500/10 px-4 py-3 text-sm font-bold text-blue-200 hover:bg-blue-500/20 disabled:opacity-60"
+              >
+                <span className="flex items-center gap-2">
+                  <LocateFixed size={16} />
+                  {locationEnabled
+                    ? "Enabled"
+                    : locationLoading
+                      ? "Requesting..."
+                      : "Enable Location"}
+                </span>
+              </button>
+            </div>
+          </div>
+
+          <button
+            disabled={loading || !locationEnabled}
+            className="primary-btn w-full flex items-center justify-center gap-3 py-4 text-lg disabled:opacity-40 disabled:cursor-not-allowed"
+          >
 
             {loading
               ? "Creating Account..."
@@ -310,7 +442,8 @@ const Signup = () => {
 
         <button
           onClick={handleGoogleSignup}
-          className="w-full border border-gray-700 hover:border-blue-500 transition rounded-2xl py-4 text-lg font-medium flex items-center justify-center gap-4"
+          disabled={loading || !locationEnabled}
+          className="w-full border border-gray-700 hover:border-blue-500 transition rounded-2xl py-4 text-lg font-medium flex items-center justify-center gap-4 disabled:opacity-40 disabled:cursor-not-allowed"
         >
 
           <FcGoogle size={24} />

@@ -2,12 +2,25 @@ import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { MessageCircle, X, Send, Bot, Sparkles, Minimize2 } from "lucide-react";
 import API from "../../services/api";
-import { MCQWidget, SeatSelectionWidget, SummaryWidget } from "./BookingWidgets";
+import {
+  buildClientContext,
+  getStoredLocation,
+  needsLocationForTicketing,
+  requestBrowserLocation,
+} from "../../utils/location";
+import {
+  InputWidget,
+  MCQWidget,
+  SeatSelectionWidget,
+  SummaryWidget,
+  TicketDraftWidget,
+} from "./BookingWidgets";
 
 const ChatWidget = () => {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [userLocation, setUserLocation] = useState(getStoredLocation);
   const [messages, setMessages] = useState([
     {
       sender: "bot",
@@ -24,11 +37,37 @@ const ChatWidget = () => {
     scrollToBottom();
   }, [messages, loading]);
 
+  useEffect(() => {
+    if (!open || userLocation) return;
+
+    requestBrowserLocation().then((location) => {
+      if (location) setUserLocation(location);
+    });
+  }, [open, userLocation]);
+
   const handleSend = async (customText) => {
     const textToSend = typeof customText === "string" ? customText : input;
     if (!textToSend.trim() || loading) return;
 
     const currentMessage = textToSend.trim();
+    let activeLocation = userLocation || getStoredLocation();
+
+    if (!activeLocation && needsLocationForTicketing(currentMessage)) {
+      activeLocation = await requestBrowserLocation();
+      if (activeLocation) {
+        setUserLocation(activeLocation);
+      } else {
+        setMessages((prev) => [
+          ...prev,
+          {
+            sender: "bot",
+            text: "Please allow location access so I can search nearby theatres, hotels, events, or concerts accurately.",
+          },
+        ]);
+        return;
+      }
+    }
+
     setMessages((prev) => [...prev, { sender: "user", text: currentMessage }]);
     if (typeof customText !== "string") setInput("");
     setLoading(true);
@@ -36,6 +75,7 @@ const ChatWidget = () => {
     try {
       const response = await API.post("/chat", {
         message: currentMessage,
+        clientContext: buildClientContext(activeLocation),
         history: messages.slice(-8).map((msg) => ({
           role: msg.sender === "bot" ? "assistant" : "user",
           content: msg.text,
@@ -150,16 +190,31 @@ const ChatWidget = () => {
                     {/* Dynamic Widgets */}
                     <div className="mt-3">
                       {msg.widget?.type === "mcq" && (
-                        <MCQWidget options={msg.widget.options} onSelect={(opt) => handleSend(`I select ${opt}`)} />
+                        <MCQWidget
+                          options={msg.widget.options}
+                          onSelect={(opt) => handleSend(`I select ${opt}`)}
+                          onBack={() => handleSend("Back")}
+                        />
+                      )}
+                      {msg.widget?.type === "input" && (
+                        <InputWidget onSubmit={(value) => handleSend(value)} disabled={loading} />
                       )}
                       {msg.widget?.type === "seat_selection" && (
                         <SeatSelectionWidget
                           mode={msg.widget.mode}
+                          maxSeats={msg.widget.maxSeats}
+                          onBack={() => handleSend("Back to options")}
                           onConfirm={(seats, price) => handleSend(`Selected: ${seats.join(", ")} (INR ${price})`)}
                         />
                       )}
                       {msg.widget?.type === "summary" && (
                         <SummaryWidget details={msg.widget.details} onContinue={() => handleSend(`Proceed to payment`)} />
+                      )}
+                      {msg.widget?.type === "ticket_draft" && (
+                        <TicketDraftWidget
+                          draft={msg.widget.draft}
+                          onConfirm={() => handleSend("Submit this support ticket")}
+                        />
                       )}
                     </div>
                   </div>

@@ -2,6 +2,7 @@ import { useRef, useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import QRCode from "qrcode";
 import {
+  ArrowLeft,
   CheckCircle2,
   CreditCard,
   Download,
@@ -310,7 +311,7 @@ export const InputWidget = ({ onSubmit, disabled }) => {
 };
 
 // --- MCQ WIDGET: NEON NEUMORPHISM ---
-export const MCQWidget = ({ options, onSelect }) => {
+export const MCQWidget = ({ options, onSelect, onBack }) => {
   return (
     <motion.div 
       initial={{ opacity: 0, y: 10 }}
@@ -332,19 +333,36 @@ export const MCQWidget = ({ options, onSelect }) => {
           </span>
         </motion.button>
       ))}
+      {onBack && (
+        <button
+          type="button"
+          onClick={onBack}
+          className="mt-1 flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-xs font-bold uppercase tracking-widest text-gray-300 hover:bg-white/10"
+        >
+          <ArrowLeft size={14} />
+          Back
+        </button>
+      )}
     </motion.div>
   );
 };
 
 // --- AUTHENTIC SEATING LAYOUTS ---
-export const SeatSelectionWidget = ({ mode = 'movie', onConfirm }) => {
+export const SeatSelectionWidget = ({
+  mode = 'movie',
+  maxSeats = 1,
+  onConfirm,
+  onBack,
+}) => {
   const [selected, setSelected] = useState([]);
+  const seatLimit = Math.max(1, Number(maxSeats) || 1);
   
   const configs = {
     movie: { price: 250, label: "SCREEN" },
     flight: { price: 4500, label: "COCKPIT" },
     bus: { price: 800, label: "DRIVER" },
     train: { price: 1200, label: "TRAIN ENGINE" },
+    hotel: { price: 3500, label: "ROOMS" },
     event: { price: 3000, label: "STAGE" }
   };
   const config = configs[mode] || configs['movie'];
@@ -362,6 +380,8 @@ export const SeatSelectionWidget = ({ mode = 'movie', onConfirm }) => {
       [1,2,3,4,5].forEach(r => { allSeats.push(`${r}W`, `${r}A`, `${r}B`); });
     } else if (mode === 'flight') {
       [1,2,3,4,5,6].forEach(r => { ['A','B','C','D','E','F'].forEach(c => allSeats.push(`${r}${c}`)); });
+    } else if (mode === 'hotel') {
+      [2,3,4,5].forEach(floor => { ['01','02','03','04'].forEach(room => allSeats.push(`${floor}${room}`)); });
     } else {
       ['A','B','C','D','E','F'].forEach(r => { [1,2,3,4,5,6,7,8].forEach(c => allSeats.push(`${r}${c}`)); });
     }
@@ -371,7 +391,11 @@ export const SeatSelectionWidget = ({ mode = 'movie', onConfirm }) => {
 
   const toggleSeat = (seat) => {
     if (occupiedMap[seat]) return;
-    setSelected(prev => prev.includes(seat) ? prev.filter(s => s !== seat) : [...prev, seat]);
+    setSelected((prev) => {
+      if (prev.includes(seat)) return prev.filter((item) => item !== seat);
+      if (prev.length >= seatLimit) return prev;
+      return [...prev, seat];
+    });
   };
 
   const Seat = ({ id, label, className = "" }) => {
@@ -509,6 +533,36 @@ export const SeatSelectionWidget = ({ mode = 'movie', onConfirm }) => {
     </div>
   );
 
+  const renderHotel = () => (
+    <div className="flex flex-col items-center w-full">
+      <div className="w-full max-w-[250px] rounded-3xl border border-emerald-500/20 bg-emerald-950/10 p-5 shadow-inner">
+        <div className="mb-5 flex items-center justify-between border-b border-white/10 pb-3">
+          <span className="text-[9px] font-black uppercase tracking-widest text-emerald-300">
+            Available Rooms
+          </span>
+          <span className="text-[9px] font-bold text-zinc-500">
+            Demo hold
+          </span>
+        </div>
+        <div className="grid grid-cols-4 gap-2">
+          {[2, 3, 4, 5].map((floor) =>
+            ['01', '02', '03', '04'].map((room) => (
+              <Seat
+                key={`${floor}${room}`}
+                id={`${floor}${room}`}
+                label={`${floor}${room}`}
+                className="h-9 rounded-lg border border-emerald-900/30"
+              />
+            ))
+          )}
+        </div>
+        <p className="mt-4 text-center text-[9px] font-bold uppercase tracking-[0.22em] text-zinc-500">
+          Room selection
+        </p>
+      </div>
+    </div>
+  );
+
   return (
     <motion.div 
       initial={{ opacity: 0, scale: 0.95 }}
@@ -518,23 +572,37 @@ export const SeatSelectionWidget = ({ mode = 'movie', onConfirm }) => {
       {mode === 'train' && renderTrain()}
       {mode === 'bus' && renderBus()}
       {mode === 'flight' && renderFlight()}
+      {mode === 'hotel' && renderHotel()}
       {(mode === 'movie' || mode === 'event') && renderMovie()}
 
       <div className="mt-6 pt-4 border-t border-white/10 flex items-center justify-between">
         <div>
           <p className="text-[10px] text-gray-500 uppercase font-black tracking-widest">Subtotal</p>
           <p className="text-xl font-black text-white tracking-tighter">INR {selected.length * config.price}</p>
-          <p className="text-[9px] text-gray-500">{selected.length} seat(s) selected</p>
+          <p className="text-[9px] text-gray-500">
+            {selected.length} / {seatLimit} selected
+          </p>
         </div>
-        <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={() => onConfirm(selected, selected.length * config.price)}
-          disabled={selected.length === 0}
-          className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-30 disabled:from-zinc-800 disabled:to-zinc-800 px-6 py-3 rounded-xl font-black text-sm uppercase tracking-widest flex items-center gap-2 shadow-lg shadow-blue-600/20"
-        >
-          Confirm <CheckCircle2 size={16} />
-        </motion.button>
+        <div className="flex items-center gap-2">
+          {onBack && (
+            <button
+              type="button"
+              onClick={onBack}
+              className="rounded-xl border border-white/10 bg-white/5 p-3 text-gray-300 hover:bg-white/10"
+            >
+              <ArrowLeft size={16} />
+            </button>
+          )}
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => onConfirm(selected, selected.length * config.price)}
+            disabled={selected.length !== seatLimit}
+            className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-30 disabled:from-zinc-800 disabled:to-zinc-800 px-6 py-3 rounded-xl font-black text-sm uppercase tracking-widest flex items-center gap-2 shadow-lg shadow-blue-600/20"
+          >
+            Confirm <CheckCircle2 size={16} />
+          </motion.button>
+        </div>
       </div>
     </motion.div>
   );
@@ -1010,7 +1078,87 @@ export const SummaryWidget = ({
   );
 };
 
+const parseDraftSummary = (summary = "", fallbackPriority = "normal") => {
+  const fields = {};
+  const lines = String(summary || "")
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  lines.forEach((line) => {
+    const [label, ...rest] = line.split(":");
+    if (!label || !rest.length) return;
+    fields[label.trim().toLowerCase()] = rest.join(":").trim();
+  });
+
+  return {
+    issue: fields.issue || summary || "Support issue not specified",
+    target: fields["ticket target"] || fields["affected service"] || "",
+    priority: fields.priority || fallbackPriority,
+    requestedAction: fields["requested action"] || "Review and follow up with the customer.",
+  };
+};
+
 export const TicketDraftWidget = ({ draft, onConfirm }) => {
+  const [draftId] = useState(() => draft.id || `CX-DRAFT-${Date.now().toString().slice(-6)}`);
+  const parsed = parseDraftSummary(draft.summary, draft.priority);
+  const priority = String(parsed.priority || draft.priority || "normal").toLowerCase();
+
+  const handleDownloadPdf = () => {
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+
+    doc.setFillColor(7, 10, 18);
+    doc.rect(0, 0, 210, 297, "F");
+
+    doc.setFillColor(14, 23, 42);
+    doc.roundedRect(14, 16, 182, 248, 8, 8, "F");
+    doc.setDrawColor(99, 102, 241);
+    doc.setLineWidth(0.8);
+    doc.roundedRect(14, 16, 182, 248, 8, 8);
+
+    doc.setFillColor(79, 70, 229);
+    doc.roundedRect(14, 16, 182, 36, 8, 8, "F");
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(20);
+    doc.text("COLLABX SUPPORT TICKET", 24, 32);
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Draft ID: ${draftId}`, 24, 43);
+
+    doc.setTextColor(226, 232, 240);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.text(draft.title || "Support ticket draft", 24, 70);
+
+    const writeBlock = (label, value, y) => {
+      doc.setTextColor(148, 163, 184);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.text(label.toUpperCase(), 24, y);
+      doc.setTextColor(241, 245, 249);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(11);
+      const wrapped = doc.splitTextToSize(String(value || "-"), pageWidth - 48);
+      doc.text(wrapped, 24, y + 8);
+      return y + 14 + wrapped.length * 6;
+    };
+
+    let y = 88;
+    y = writeBlock("Issue / Reason", parsed.issue, y);
+    y = writeBlock("Ticket target", parsed.target || draft.category, y);
+    y = writeBlock("Category", draft.category || "general_support", y);
+    y = writeBlock("Priority", priority, y);
+    writeBlock("Requested action", parsed.requestedAction, y);
+
+    doc.setTextColor(100, 116, 139);
+    doc.setFontSize(9);
+    doc.text("Generated by CollabX AI ticket assistant", pageWidth / 2, 276, { align: "center" });
+
+    doc.save(`${draftId}_Support_Ticket.pdf`);
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.95 }}
@@ -1030,6 +1178,20 @@ export const TicketDraftWidget = ({ draft, onConfirm }) => {
           <p className="text-[10px] text-gray-500 uppercase font-black tracking-widest">Title</p>
           <p className="text-sm text-gray-200 mt-1 font-semibold">{draft.title}</p>
         </div>
+
+        <div>
+          <p className="text-[10px] text-gray-500 uppercase font-black tracking-widest">Issue / Reason</p>
+          <div className="mt-1 p-3 bg-amber-500/10 rounded-xl border border-amber-500/20 text-sm text-amber-100 whitespace-pre-wrap">
+            {parsed.issue}
+          </div>
+        </div>
+
+        {parsed.target && (
+          <div>
+            <p className="text-[10px] text-gray-500 uppercase font-black tracking-widest">Ticket Target</p>
+            <p className="text-sm text-gray-200 mt-1 font-semibold">{parsed.target}</p>
+          </div>
+        )}
         
         <div className="grid grid-cols-2 gap-4">
           <div>
@@ -1038,8 +1200,8 @@ export const TicketDraftWidget = ({ draft, onConfirm }) => {
           </div>
           <div>
             <p className="text-[10px] text-gray-500 uppercase font-black tracking-widest">Priority</p>
-            <p className={`text-sm mt-1 inline-block px-2 py-1 rounded ${draft.priority === 'High' ? 'text-red-300 bg-red-500/20' : 'text-blue-300 bg-blue-500/20'}`}>
-              {draft.priority}
+            <p className={`text-sm mt-1 inline-block px-2 py-1 rounded ${priority === 'high' ? 'text-red-300 bg-red-500/20' : 'text-blue-300 bg-blue-500/20'}`}>
+              {priority}
             </p>
           </div>
         </div>
@@ -1052,12 +1214,21 @@ export const TicketDraftWidget = ({ draft, onConfirm }) => {
         </div>
       </div>
 
-      <div className="p-4 bg-white/5 border-t border-white/10">
+      <div className="p-4 bg-white/5 border-t border-white/10 flex gap-3">
+        <motion.button
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
+          onClick={handleDownloadPdf}
+          className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white hover:bg-white/10"
+          title="Download ticket PDF"
+        >
+          <Download size={18} />
+        </motion.button>
         <motion.button
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
           onClick={onConfirm}
-          className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white py-3 rounded-xl font-black text-sm uppercase tracking-widest shadow-lg flex items-center justify-center gap-2"
+          className="flex-1 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white py-3 rounded-xl font-black text-sm uppercase tracking-widest shadow-lg flex items-center justify-center gap-2"
         >
           Submit Ticket <Send size={16} />
         </motion.button>
@@ -1065,4 +1236,3 @@ export const TicketDraftWidget = ({ draft, onConfirm }) => {
     </motion.div>
   );
 };
-

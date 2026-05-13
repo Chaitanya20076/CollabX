@@ -23,6 +23,7 @@ import {
   XCircle,
   RotateCcw,
   CreditCard,
+  Search,
 } from "lucide-react";
 
 import toast from "react-hot-toast";
@@ -61,6 +62,12 @@ const Dashboard = () => {
   const [bookingLoading, setBookingLoading] =
     useState(false);
   const [notificationOpen, setNotificationOpen] =
+    useState(false);
+  const [trackingCode, setTrackingCode] =
+    useState("");
+  const [trackingResult, setTrackingResult] =
+    useState(null);
+  const [trackingLoading, setTrackingLoading] =
     useState(false);
 
   useEffect(() => {
@@ -110,7 +117,7 @@ const Dashboard = () => {
 
     const socket = io(
       import.meta.env.VITE_API_ORIGIN ||
-        "https://collabx-9sf9.onrender.com",
+        "http://localhost:5000",
       {
         auth: {
           userId: user.uid,
@@ -386,6 +393,60 @@ const Dashboard = () => {
       toast.success("Verification email sent");
     } catch (error) {
       toast.error(error.message);
+    }
+  };
+
+  const getFakeTrackingStatus = (record, type) => {
+    if (type === "booking") {
+      if (record.status === "cancelled") return "Cancelled";
+      if (record.refundStatus && record.refundStatus !== "none") {
+        return `Refund ${record.refundStatus}`;
+      }
+      if (record.paymentStatus === "paid") return "Paid and confirmed";
+      return "Confirmed, payment pending";
+    }
+
+    const priority = String(record.priority || "").toLowerCase();
+    if (record.status === "resolved") return "Resolved";
+    if (priority === "high") return "Assigned, high priority review";
+    if (priority === "medium") return "Assigned, in progress";
+    return "Received, queued for review";
+  };
+
+  const handleTrackCode = async (e) => {
+    e.preventDefault();
+
+    const code = trackingCode.trim();
+    if (!code) {
+      toast.error("Enter a tracking code");
+      return;
+    }
+
+    try {
+      setTrackingLoading(true);
+      setTrackingResult(null);
+
+      try {
+        const bookingResponse = await API.get(
+          `/bookings/track/${encodeURIComponent(code)}`
+        );
+        setTrackingResult(bookingResponse.data);
+        return;
+      } catch (bookingError) {
+        if (bookingError.response?.status !== 404) {
+          throw bookingError;
+        }
+      }
+
+      const ticketResponse = await API.get(
+        `/tickets/track/${encodeURIComponent(code)}`
+      );
+      setTrackingResult(ticketResponse.data);
+    } catch (error) {
+      console.log(error);
+      toast.error("No record found for this tracking code");
+    } finally {
+      setTrackingLoading(false);
     }
   };
 
@@ -797,6 +858,122 @@ const Dashboard = () => {
 
         </div>
 
+        {/* TRACKING */}
+
+        <motion.div
+          initial={{ opacity: 0, y: 18 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, delay: 0.08 }}
+          className="bg-[#0a0a0a] border border-gray-800 rounded-[32px] p-8 mb-14"
+        >
+
+          <div className="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-8">
+
+            <div className="max-w-xl">
+
+              <h2 className="text-3xl font-bold">
+                Track Ticket Or Booking
+              </h2>
+
+              <p className="text-gray-400 mt-2 leading-7">
+                Enter the tracking code generated after a booking or support ticket is created.
+              </p>
+
+              <form
+                onSubmit={handleTrackCode}
+                className="mt-6 flex flex-col sm:flex-row gap-3"
+              >
+                <input
+                  value={trackingCode}
+                  onChange={(e) => setTrackingCode(e.target.value)}
+                  placeholder="Example: CX-TKT-AB12CD34"
+                  className="flex-1 bg-black border border-gray-700 rounded-2xl px-5 py-4 outline-none focus:border-blue-500"
+                />
+
+                <button
+                  disabled={trackingLoading}
+                  className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 px-6 py-4 rounded-2xl font-bold flex items-center justify-center gap-2"
+                >
+                  <Search size={18} />
+                  {trackingLoading ? "Checking..." : "Track"}
+                </button>
+              </form>
+
+            </div>
+
+            <div className="xl:w-[460px] bg-black border border-gray-800 rounded-3xl p-6 min-h-[180px]">
+
+              {!trackingResult && (
+                <div className="h-full flex flex-col justify-center">
+                  <p className="text-gray-300 font-semibold">
+                    No tracking lookup yet
+                  </p>
+                  <p className="text-gray-500 text-sm mt-2">
+                    Your result will show the fake/live demo status, record type, and generated code.
+                  </p>
+                </div>
+              )}
+
+              {trackingResult && (() => {
+                const record = trackingResult.record || {};
+                const isBooking = trackingResult.type === "booking";
+                const code =
+                  record.trackingCode ||
+                  record.confirmationCode ||
+                  record.id;
+
+                return (
+                  <div>
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="text-xs uppercase tracking-widest text-gray-500 font-black">
+                          {isBooking ? "Booking" : "Support Ticket"}
+                        </p>
+                        <h3 className="text-xl font-bold mt-2">
+                          {record.title || record.type || record.category}
+                        </h3>
+                      </div>
+
+                      <span className="bg-blue-500/10 border border-blue-500/20 text-blue-300 px-3 py-2 rounded-xl text-xs font-bold">
+                        {code}
+                      </span>
+                    </div>
+
+                    <div className="mt-5 grid grid-cols-2 gap-3">
+                      <div className="bg-white/[0.04] rounded-2xl p-4 border border-white/10">
+                        <p className="text-[10px] uppercase tracking-widest text-gray-500 font-black">
+                          Status
+                        </p>
+                        <p className="text-sm text-green-300 font-semibold mt-2">
+                          {getFakeTrackingStatus(record, trackingResult.type)}
+                        </p>
+                      </div>
+
+                      <div className="bg-white/[0.04] rounded-2xl p-4 border border-white/10">
+                        <p className="text-[10px] uppercase tracking-widest text-gray-500 font-black">
+                          Priority / Type
+                        </p>
+                        <p className="text-sm text-gray-200 font-semibold mt-2 capitalize">
+                          {record.priority || record.type || "normal"}
+                        </p>
+                      </div>
+                    </div>
+
+                    <p className="text-gray-400 text-sm leading-6 mt-5 line-clamp-3">
+                      {isBooking
+                        ? `Confirmation ${record.confirmationCode || code}. Payment ${record.paymentStatus || "unpaid"}.`
+                        : record.summary || "Support ticket is being reviewed."}
+                    </p>
+                  </div>
+                );
+              })()}
+
+            </div>
+
+          </div>
+
+        </motion.div>
+
         {/* SMART ANALYTICS */}
 
         <div className="grid lg:grid-cols-3 gap-8 mb-14">
@@ -1053,6 +1230,10 @@ const Dashboard = () => {
                           </p>
 
                           <p className="text-gray-400 mt-2">
+                            Tracking: {booking.trackingCode || booking.confirmationCode}
+                          </p>
+
+                          <p className="text-gray-500 text-sm mt-2">
                             Confirmation: {booking.confirmationCode}
                           </p>
 
@@ -1152,7 +1333,7 @@ const Dashboard = () => {
                       </p>
 
                       <p className="text-gray-400 text-sm mt-1">
-                        {booking.confirmationCode} / {booking.status} / Refund: {booking.refundStatus}
+                        {booking.trackingCode || booking.confirmationCode} / {booking.status} / Refund: {booking.refundStatus}
                       </p>
 
                     </div>
@@ -1499,7 +1680,7 @@ const Dashboard = () => {
                       >
 
                         <td className="px-8 py-6">
-                          {ticket.id}
+                          {ticket.trackingCode || ticket.id}
                         </td>
 
                         <td className="px-8 py-6">
