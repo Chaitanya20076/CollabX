@@ -36,7 +36,7 @@ import {
 } from "react-router-dom";
 
 import { AuthContext } from "../../context/AuthContext";
-import API from "../../services/api";
+import API, { API_ORIGIN } from "../../services/api";
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -116,8 +116,7 @@ const Dashboard = () => {
     if (!user?.uid) return undefined;
 
     const socket = io(
-      import.meta.env.VITE_API_ORIGIN ||
-        "http://localhost:5000",
+      API_ORIGIN,
       {
         auth: {
           userId: user.uid,

@@ -30,7 +30,7 @@ import {
 import toast from "react-hot-toast";
 
 import { AuthContext } from "../../context/AuthContext";
-import API from "../../services/api";
+import API, { API_BASE_URL } from "../../services/api";
 import {
   buildClientContext,
   getStoredLocation,
@@ -118,8 +118,7 @@ const buildTitle = (message) =>
     ? `${message.slice(0, 33)}...`
     : message || "New support chat";
 
-const apiBaseUrl =
-  import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+const apiBaseUrl = API_BASE_URL;
 
 const extractSelectedDate = (message = "") => {
   const match = String(message).match(
