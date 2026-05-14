@@ -10,6 +10,7 @@ import cookieParser from "cookie-parser";
 
 import rateLimit from "express-rate-limit";
 
+import { corsOptions } from "./config/corsOptions.js";
 import chatbotRoutes from "./routes/chatbotRoutes.js";
 import ticketRoutes from "./routes/ticketRoutes.js";
 import bookingRoutes from "./routes/bookingRoutes.js";
@@ -21,14 +22,7 @@ import adminRoutes from "./routes/adminRoutes.js";
 const app = express();
 
 app.use(
-  cors({
-    origin: [
-      process.env.FRONTEND_URL || "http://localhost:5173",
-      "http://localhost:5173",
-      "http://127.0.0.1:5173",
-    ].filter(Boolean),
-    credentials: true,
-  })
+  cors(corsOptions)
 );
 
 app.use(
