@@ -40,6 +40,7 @@ import {
 import { storage } from "../../config/firebase";
 import {
   CollabXPaymentWidget,
+  DatePickerWidget,
   InputWidget,
   MCQWidget,
   SeatSelectionWidget,
@@ -120,6 +121,22 @@ const buildTitle = (message) =>
 const apiBaseUrl =
   import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
+const extractSelectedDate = (message = "") => {
+  const match = String(message).match(
+    /\b(20\d{2})[-/](\d{1,2})[-/](\d{1,2})\b/
+  );
+
+  if (!match) return "";
+
+  const [, year, month, day] = match;
+  return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+};
+
+const dateToIso = (dateValue) =>
+  dateValue
+    ? new Date(`${dateValue}T12:00:00`).toISOString()
+    : new Date().toISOString();
+
 const AIChat = () => {
   const { user } = useContext(AuthContext);
   const [sessions, setSessions] = useState(loadSessions);
@@ -132,6 +149,7 @@ const AIChat = () => {
   const [attachments, setAttachments] = useState([]);
   const [latestMeta, setLatestMeta] = useState(null);
   const [bookingDraft, setBookingDraft] = useState(null);
+  const [selectedBookingDate, setSelectedBookingDate] = useState("");
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [listening, setListening] = useState(false);
   const [showTools, setShowTools] = useState(true);
@@ -285,6 +303,7 @@ const AIChat = () => {
     setAttachments([]);
     setLatestMeta(null);
     setBookingDraft(null);
+    setSelectedBookingDate("");
   };
 
   const handleDeleteChat = async (chatId) => {
@@ -296,6 +315,7 @@ const AIChat = () => {
       setActiveId(nextSessions[0].id);
       setLatestMeta(null);
       setBookingDraft(null);
+      setSelectedBookingDate("");
     }
 
     try {
@@ -400,7 +420,7 @@ const AIChat = () => {
         type,
         quantity: 1,
         title: latestMeta.intent.label,
-        travelDate: new Date().toISOString(),
+        travelDate: dateToIso(selectedBookingDate),
       });
 
       toast.success(
@@ -480,6 +500,7 @@ const AIChat = () => {
           ...(details.length
             ? details
             : [`${booking.title}: ${bookingDraft?.seats?.join(", ") || ""}`]),
+          `Date: ${bookingDraft?.date || selectedBookingDate || "Selected date"}`,
           `Seats: ${bookingDraft?.seats?.join(", ") || "Selected seats"}`,
           `Amount Paid: INR ${bookingDraft?.price || booking.pricing?.total || 0}`,
           `Booking ID: ${booking.id}`,
@@ -516,7 +537,7 @@ const AIChat = () => {
         selectedSeats: bookingDraft.seats,
         totalAmount: bookingDraft.price,
         title: latestMeta?.intent?.label || `${type} booking`,
-        travelDate: new Date().toISOString(),
+        travelDate: dateToIso(bookingDraft.date || selectedBookingDate),
       });
 
       const booking = bookingResponse.data.booking;
@@ -554,6 +575,11 @@ const AIChat = () => {
       (messageOverride || input).trim();
 
     if (!currentMessage || loading) return;
+
+    const dateFromMessage = extractSelectedDate(currentMessage);
+    if (dateFromMessage) {
+      setSelectedBookingDate(dateFromMessage);
+    }
 
     let activeLocation = userLocation || getStoredLocation();
 
@@ -1006,6 +1032,17 @@ const AIChat = () => {
                       disabled={index !== messages.length - 1 || loading}
                     />
                   )}
+                  {message.widget && message.widget.type === "date_picker" && (
+                    <DatePickerWidget
+                      mode={message.widget.mode}
+                      includeNights={message.widget.includeNights}
+                      disabled={index !== messages.length - 1 || loading}
+                      onSelect={({ date, message: dateMessage }) => {
+                        setSelectedBookingDate(date);
+                        handleSend(dateMessage);
+                      }}
+                    />
+                  )}
                   {message.widget && message.widget.type === "mcq" && (
                     <MCQWidget
                       options={message.widget.options}
@@ -1023,6 +1060,7 @@ const AIChat = () => {
                           mode: message.widget.mode,
                           seats,
                           price,
+                          date: selectedBookingDate,
                         });
                         handleSend(
                           `I selected seats: ${seats.join(", ")} for INR ${price}. Please provide the summary.`

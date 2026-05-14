@@ -145,7 +145,19 @@ const inferBookingStage = (message = "", history = [], intent = {}) => {
 };
 
 const hasDateHint = (text = "") =>
-  /\b(today|tomorrow|tonight|weekend|monday|tuesday|wednesday|thursday|friday|saturday|sunday|\d{1,2}[/-]\d{1,2}|\d{1,2}\s*(am|pm))\b/i.test(text);
+  /\b(today|tomorrow|tonight|weekend|monday|tuesday|wednesday|thursday|friday|saturday|sunday|\d{4}[/-]\d{1,2}[/-]\d{1,2}|\d{1,2}[/-]\d{1,2}|\d{1,2}\s*(am|pm))\b/i.test(text);
+
+const isDatePrompt = (prompt = "") =>
+  /\b(date|time|when|check-in|slot|show time)\b/i.test(prompt);
+
+const buildDatePickerWidget = (mode = "event") => ({
+  type: "date_picker",
+  mode,
+  includeNights: mode === "hotel",
+});
+
+const getMissingBookingWidget = (mode = "event", prompt = "") =>
+  isDatePrompt(prompt) ? buildDatePickerWidget(mode) : { type: "input" };
 
 const hasPastDateHint = (text = "") => {
   const lower = text.toLowerCase();
@@ -1116,7 +1128,7 @@ const buildDeterministicResponse = async (
     return {
       reply:
         "I cannot book tickets or stays for a past date. Please share a current or upcoming date so I can check live availability.",
-      widget: { type: "input" },
+      widget: buildDatePickerWidget(optionKey),
       usedWebSearch: false,
     };
   }
@@ -1168,7 +1180,7 @@ const buildDeterministicResponse = async (
     if (missingPrompt) {
       return {
         reply: missingPrompt,
-        widget: { type: "input" },
+        widget: getMissingBookingWidget(optionKey, missingPrompt),
         usedWebSearch: false,
       };
     }
@@ -1184,7 +1196,7 @@ const buildDeterministicResponse = async (
         return {
           reply:
             "That movie request is more than 1 year old, so I cannot create a theatre booking for it. Please pick a movie/date within the last year or an upcoming show.",
-          widget: { type: "input" },
+          widget: buildDatePickerWidget(optionKey),
           usedWebSearch: false,
         };
       }
@@ -1266,7 +1278,7 @@ const parseActionWidget = (aiReply = "") => {
   let cleanReply = aiReply;
   let widget = null;
 
-  const actionPattern = /\[ACTION:(INPUT|MCQ|SEAT_SELECTION|SUMMARY)(?:\|([\s\S]*?))?\]/i;
+  const actionPattern = /\[ACTION:(INPUT|DATE_PICKER|MCQ|SEAT_SELECTION|SUMMARY)(?:\|([\s\S]*?))?\]/i;
   const actionMatch = aiReply.match(actionPattern);
 
   if (!actionMatch) {
@@ -1281,6 +1293,11 @@ const parseActionWidget = (aiReply = "") => {
 
   if (action === "INPUT") {
     widget = { type: "input" };
+  }
+
+  if (action === "DATE_PICKER") {
+    const mode = payload.trim().toLowerCase() || "event";
+    widget = buildDatePickerWidget(mode);
   }
 
   if (action === "MCQ") {

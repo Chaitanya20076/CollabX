@@ -23,6 +23,9 @@ import ProtectedRoute from "./ProtectedRoute";
 const AppRoutes = () => {
   return (
     <Routes>
+      <Route path="/payment-confirm/:token" element={<PaymentConfirm />} />
+      <Route path="/refund-confirm/:token" element={<RefundConfirm />} />
+
       <Route path="/" element={<MainLayout />}>
         <Route index element={<Home />} />
         <Route path="about" element={<About />} />
@@ -33,8 +36,6 @@ const AppRoutes = () => {
         <Route path="login" element={<Login />} />
         <Route path="signup" element={<Signup />} />
         <Route path="verify-email" element={<VerifyEmail />} />
-        <Route path="payment-confirm/:token" element={<PaymentConfirm />} />
-        <Route path="refund-confirm/:token" element={<RefundConfirm />} />
         <Route
           path="dashboard"
           element={
@@ -61,11 +62,7 @@ const AppRoutes = () => {
         />
         <Route
           path="ai-chat"
-          element={
-            <ProtectedRoute>
-              <AIChat />
-            </ProtectedRoute>
-          }
+          element={<AIChat />}
         />
       </Route>
 

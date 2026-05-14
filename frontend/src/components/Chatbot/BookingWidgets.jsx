@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import QRCode from "qrcode";
 import {
   ArrowLeft,
+  CalendarDays,
   CheckCircle2,
   CreditCard,
   Download,
@@ -16,6 +17,8 @@ import {
 import { jsPDF } from "jspdf";
 
 import API from "../../services/api";
+
+const paymentStorageKey = (token) => `collabx-payment-confirmed:${token}`;
 
 // --- INPUT WIDGET: INLINE TEXT REPLY ---
 export const InputWidget = ({ onSubmit, disabled }) => {
@@ -307,6 +310,145 @@ export const InputWidget = ({ onSubmit, disabled }) => {
         <Send size={16} />
       </button>
     </motion.form>
+  );
+};
+
+const toDateInputValue = (date) => {
+  const next = new Date(date);
+  next.setMinutes(next.getMinutes() - next.getTimezoneOffset());
+  return next.toISOString().slice(0, 10);
+};
+
+const formatDateLabel = (value) =>
+  new Date(`${value}T12:00:00`).toLocaleDateString("en-IN", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+
+export const DatePickerWidget = ({
+  mode = "event",
+  includeNights = false,
+  onSelect,
+  disabled,
+}) => {
+  const today = toDateInputValue(new Date());
+  const tomorrowDate = new Date();
+  tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+
+  const weekendDate = new Date();
+  const daysUntilSaturday = (6 - weekendDate.getDay() + 7) % 7 || 7;
+  weekendDate.setDate(weekendDate.getDate() + daysUntilSaturday);
+
+  const [selectedDate, setSelectedDate] = useState(today);
+  const [nights, setNights] = useState(1);
+
+  const quickDates = [
+    { label: "Today", value: today },
+    { label: "Tomorrow", value: toDateInputValue(tomorrowDate) },
+    { label: "Weekend", value: toDateInputValue(weekendDate) },
+  ];
+
+  const handleConfirm = () => {
+    if (!selectedDate || disabled) return;
+
+    const dateLabel = formatDateLabel(selectedDate);
+    const nightsText = includeNights
+      ? ` for ${nights} ${nights === 1 ? "night" : "nights"}`
+      : "";
+
+    onSelect?.({
+      date: selectedDate,
+      nights: includeNights ? nights : null,
+      message: `Selected date: ${selectedDate} (${dateLabel})${nightsText}`,
+    });
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="mt-4 w-full max-w-md rounded-2xl border border-white/10 bg-zinc-950/80 p-4 shadow-xl"
+    >
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.22em] text-blue-300">
+            Live search date
+          </p>
+          <p className="mt-1 text-sm font-semibold text-white">
+            {mode === "hotel" ? "Choose check-in" : "Choose booking date"}
+          </p>
+        </div>
+        <div className="rounded-xl border border-blue-400/20 bg-blue-500/10 p-3 text-blue-200">
+          <CalendarDays size={20} />
+        </div>
+      </div>
+
+      <div className="mt-4 grid grid-cols-3 gap-2">
+        {quickDates.map((item) => (
+          <button
+            key={item.label}
+            type="button"
+            disabled={disabled}
+            onClick={() => setSelectedDate(item.value)}
+            className={`rounded-xl border px-3 py-2 text-xs font-black uppercase tracking-widest transition ${
+              selectedDate === item.value
+                ? "border-blue-400 bg-blue-500 text-white"
+                : "border-white/10 bg-white/5 text-gray-300 hover:bg-white/10"
+            }`}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+
+      <label className="mt-4 block">
+        <span className="sr-only">Select date</span>
+        <input
+          type="date"
+          min={today}
+          value={selectedDate}
+          disabled={disabled}
+          onChange={(event) => setSelectedDate(event.target.value)}
+          className="h-12 w-full rounded-xl border border-white/10 bg-black/40 px-4 text-sm font-semibold text-white outline-none focus:border-blue-400"
+        />
+      </label>
+
+      {includeNights && (
+        <div className="mt-4 flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
+          <span className="text-sm font-semibold text-gray-200">Nights</span>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              disabled={disabled || nights <= 1}
+              onClick={() => setNights((value) => Math.max(1, value - 1))}
+              className="h-8 w-8 rounded-lg border border-white/10 bg-white/5 text-lg font-bold disabled:opacity-40"
+            >
+              -
+            </button>
+            <span className="w-6 text-center text-sm font-black">{nights}</span>
+            <button
+              type="button"
+              disabled={disabled || nights >= 30}
+              onClick={() => setNights((value) => Math.min(30, value + 1))}
+              className="h-8 w-8 rounded-lg border border-white/10 bg-white/5 text-lg font-bold disabled:opacity-40"
+            >
+              +
+            </button>
+          </div>
+        </div>
+      )}
+
+      <button
+        type="button"
+        disabled={!selectedDate || disabled}
+        onClick={handleConfirm}
+        className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-black uppercase tracking-widest text-white transition hover:bg-blue-500 disabled:opacity-40"
+      >
+        Use Date <Send size={16} />
+      </button>
+    </motion.div>
   );
 };
 
@@ -617,6 +759,10 @@ export const CollabXPaymentWidget = ({
   const [qrUrl, setQrUrl] = useState("");
   const [status, setStatus] = useState(session?.status || "pending");
   const completedRef = useRef(false);
+  const confirmationUrl =
+    session?.token && typeof window !== "undefined"
+      ? `${window.location.origin}/payment-confirm/${session.token}`
+      : session?.confirmationUrl || "";
 
   const notifySuccess = (payload) => {
     if (completedRef.current) return;
@@ -624,10 +770,17 @@ export const CollabXPaymentWidget = ({
     onSuccess?.(payload);
   };
 
-  useEffect(() => {
-    if (!session?.confirmationUrl) return;
+  const buildSuccessPayload = (nextSession) => ({
+    orderId: nextSession.id,
+    paymentId: nextSession.razorpayPaymentId,
+    method: nextSession.paymentMethod || "upi",
+    session: nextSession,
+  });
 
-    QRCode.toDataURL(session.confirmationUrl, {
+  useEffect(() => {
+    if (!confirmationUrl) return;
+
+    QRCode.toDataURL(confirmationUrl, {
       errorCorrectionLevel: "M",
       margin: 2,
       color: {
@@ -638,10 +791,44 @@ export const CollabXPaymentWidget = ({
     })
       .then(setQrUrl)
       .catch(console.error);
-  }, [session?.confirmationUrl]);
+  }, [confirmationUrl]);
 
   useEffect(() => {
     if (!session?.token || status === "paid") return;
+
+    const readStoredConfirmation = () => {
+      try {
+        const raw = localStorage.getItem(paymentStorageKey(session.token));
+        return raw ? JSON.parse(raw) : null;
+      } catch {
+        return null;
+      }
+    };
+
+    const storedConfirmation = readStoredConfirmation();
+    if (storedConfirmation?.status === "paid") {
+      setStatus("paid");
+      notifySuccess(buildSuccessPayload(storedConfirmation));
+      return;
+    }
+
+    const handleStorage = (event) => {
+      if (event.key !== paymentStorageKey(session.token) || !event.newValue) {
+        return;
+      }
+
+      try {
+        const nextSession = JSON.parse(event.newValue);
+        if (nextSession.status === "paid") {
+          setStatus("paid");
+          notifySuccess(buildSuccessPayload(nextSession));
+        }
+      } catch {
+        // Ignore malformed cross-tab payment messages.
+      }
+    };
+
+    window.addEventListener("storage", handleStorage);
 
     const timer = window.setInterval(async () => {
       try {
@@ -654,19 +841,17 @@ export const CollabXPaymentWidget = ({
 
         if (nextSession.status === "paid") {
           window.clearInterval(timer);
-          notifySuccess({
-            orderId: nextSession.id,
-            paymentId: nextSession.razorpayPaymentId,
-            method: nextSession.paymentMethod || "upi",
-            session: nextSession,
-          });
+          notifySuccess(buildSuccessPayload(nextSession));
         }
       } catch (error) {
         console.log("Payment status polling skipped", error);
       }
     }, 2200);
 
-    return () => window.clearInterval(timer);
+    return () => {
+      window.removeEventListener("storage", handleStorage);
+      window.clearInterval(timer);
+    };
   }, [onSuccess, session?.token, status]);
 
   return (
@@ -768,14 +953,14 @@ export const CollabXPaymentWidget = ({
           </div>
 
           <p className="mt-3 break-all text-center text-[10px] text-gray-500">
-            {session?.confirmationUrl}
+            {confirmationUrl}
           </p>
 
-          {session?.confirmationUrl && (
+          {confirmationUrl && (
             <a
-              href={session.confirmationUrl}
+              href={confirmationUrl}
               target="_blank"
-              rel="noreferrer"
+              rel="noopener"
               className="mt-3 block rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-center text-xs font-black uppercase tracking-widest text-blue-700"
             >
               Open payment link

@@ -6,6 +6,8 @@ import toast from "react-hot-toast";
 
 import API from "../../services/api";
 
+const paymentStorageKey = (token) => `collabx-payment-confirmed:${token}`;
+
 const PaymentConfirm = () => {
   const { token } = useParams();
   const [session, setSession] = useState(null);
@@ -32,6 +34,10 @@ const PaymentConfirm = () => {
     try {
       const response = await API.post(`/payments/collabx-session/${token}/confirm`, { method: "upi" });
       setSession(response.data.session);
+      localStorage.setItem(
+        paymentStorageKey(token),
+        JSON.stringify(response.data.session)
+      );
       toast.success("Transaction Authorized");
     } catch (error) {
       toast.error("Handshake Failed");
